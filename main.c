@@ -24,12 +24,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 // no.of reserved words
 #define NORW 11
 
 // max.no. of digits in numbers
 #define NMAX 14
+
+// length of identifier table
+#define TXMAX 100
 
 // length of identifiers
 #define IMAX 10
@@ -76,7 +80,7 @@ enum symbol {
 enum object {
   constant,
   variable,
-  procedure
+  proc
 };
 
 enum fct {
@@ -96,21 +100,51 @@ struct instruction {
   int a;
 };
 
+struct tnode {
+  char *name;
+  enum object obj;
+  int val;
+  int level;
+  int adr;
+};
+
 static FILE *in;
 static FILE *out;
 
-static char ch;
+static char ch = 0x20;
+static int tx = 0;
+static int dx = 0;
 static enum symbol sym;
 static char *id;
 static int num;
 static char a[IMAX];
 static char *word[NORW];
 static enum symbol wsym[NORW];
+static struct tnode table[TXMAX];
+// static enum symbol declbegsys[] = {constsym, varsym, procsym};
+// static enum symbol statbegsys[] = {beginsym, callsym, ifsym, whilesym};
+// static enum symbol facbegsys[] = {ident, number, lparen};
+
+int symsetlen(enum symbol *symset)
+{
+  return sizeof(symset) / sizeof(symset[0]);
+}
 
 void error(int n)
 {
   fprintf(stderr,"error: %d\n", n);
   exit(1);
+}
+
+void test(enum symbol *symset)
+{
+  for (int i = 0; i < symsetlen(symset); i++)
+    if (sym == symset[i]) return;
+  fprintf(stderr, "symbol %d must be[", sym);
+  for (int i = 0; i < symsetlen(symset); i++)
+    fprintf(stderr, " %d", symset[i]);
+  fprintf(stderr, " ]\n");
+  error(0);
 }
 
 void nextch(void)
@@ -122,28 +156,25 @@ void nextch(void)
 
 void getsym(void)
 {
-  int i;
   while (isspace(ch)) nextch();
   if (isalpha(ch)) {
     sym = ident;
-    i = 0;
-    while (isalnum(ch)) {
+    for (int i = 0; isalnum(ch); i++) {
       assert(i < IMAX);
-      a[++i] = ch;
+      a[i] = ch;
       nextch();
     }
     id = a;
-    for (i = 0; i < NORW; i++)
+    for (int i = 0; i < NORW; i++)
       if (strcmp(id, word[i]) == 0) {
         sym = wsym[i];
         break;
       }
   } else if (isdigit(ch)) {
-    i = num = 0;
+    num = 0;
     sym = number;
     while (isdigit(ch)) {
       num = 10 * num + (ch - '0');
-      i++;
       nextch();
     }
   } else {
@@ -163,14 +194,40 @@ void getsym(void)
       case '[': sym = leq; break;
       case ']': sym = geq; break;
       case ';': sym = semicolon; break;
-      case ':': nextch();
-                if (ch == '=') {
-                  sym = becomes;
-                  break;
-                }
+      case ':':
+        nextch();
+        if (ch == '=') {
+          sym = becomes;
+          break;
+        }
       default: sym = nil;
     }
   }
+}
+
+void enter(enum object o, int lev)
+{
+  tx++;
+  table[tx].name = id;
+  table[tx].obj = o;
+  switch (o) {
+    case constant:
+      assert(num < AMAX);
+      table[tx].val = num;
+      break;
+    case variable:
+      table[tx].level = lev;
+      table[tx].adr = dx++;
+      break;
+    case proc:
+      table[tx].level = lev;
+      break;
+  }
+}
+
+void block(int lev, enum symbol *symset)
+{
+  // int dx, tx0, cx0;
 }
 
 int main (int argc, char **argv)
@@ -199,8 +256,9 @@ int main (int argc, char **argv)
   wsym[8] = thensym;
   wsym[9] = varsym;
   wsym[10] = whilesym;
-  ch = '\n';
   getsym();
   fprintf(out, "%d\n", sym);
+  test((enum symbol[]){ident, oddsym});
+  enter(proc, 2);
   return 0;
 }
