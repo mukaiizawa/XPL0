@@ -45,36 +45,9 @@
 #define LEVMAX 3
 
 enum symbol {
-  nil,
-  ident,
-  number,
-  plus,
-  minus,
-  times,
-  slash,
-  oddsym,
-  eql,
-  neq,
-  lss,
-  leq,
-  gtr,
-  geq,
-  lparen,
-  rparen,
-  comma,
-  semicolon,
-  period,
-  becomes,
-  beginsym,
-  endsym,
-  ifsym,
-  thensym,
-  whilesym,
-  dosym,
-  callsym,
-  constsym,
-  varsym,
-  procsym
+  becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
+  ident, ifsym, leq, lparen, lss, minus, neq, nil, number, oddsym, period, plus,
+  procsym, rparen, semicolon, slash, thensym, times, varsym, whilesym
 };
 
 enum object {
@@ -154,6 +127,17 @@ void nextch(void)
   fprintf(out, "%c", ch);
 }
 
+void dump_table(void)
+{
+  printf("table {");
+  for (int i = 0; i < tx; i++) {
+    printf("\tlevel: %d\n", table[i].level);
+    printf("\tadr: %d\n", table[i].adr);
+    printf("\tval: %d\n", table[i].val);
+  }
+  printf("}");
+}
+
 void getsym(void)
 {
   while (isspace(ch)) nextch();
@@ -205,7 +189,7 @@ void getsym(void)
   }
 }
 
-void enter(enum object o, int lev)
+static void enter(enum object o, int lev)
 {
   tx++;
   table[tx].name = id;
@@ -223,6 +207,17 @@ void enter(enum object o, int lev)
       table[tx].level = lev;
       break;
   }
+}
+
+/*
+ * find identifier id in table
+ */
+static int position()
+{
+  for (int i = 0; i < tx; i++)
+    if (strcmp(table[i].name, id) == 0) return i;
+  error(1);
+  return -1;    // never reached.
 }
 
 void block(int lev, enum symbol *symset)
@@ -259,6 +254,9 @@ int main (int argc, char **argv)
   getsym();
   fprintf(out, "%d\n", sym);
   test((enum symbol[]){ident, oddsym});
-  enter(proc, 2);
+  id = "asd";
+  enter(variable, 2);
+  dump_table();
+  printf("%d\n", position());
   return 0;
 }
