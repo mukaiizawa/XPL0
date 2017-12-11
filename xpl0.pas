@@ -1,9 +1,11 @@
-program pl0(input,output);
 {
-pl/0 compiler with code generation
-Algorithms + Data Structures = Programs written by Niklaus Wirth
-Chapter 5 - Language Structures and Compilers
+  pl/0 compiler with code generation
+  Algorithms + Data Structures = Programs
+  Chapter 5 - Language Structures and Compilers
+  written by Niklaus Wirth
 }
+
+program pl0(input,output);
 
 label 99;
 
@@ -144,6 +146,7 @@ procedure block(lev,tx: integer; fsys: symset);
    var dx: integer;     {data allocation index}
       tx0: integer;     {initial table index}
       cx0: integer;     {initial code index}
+
    procedure enter(k: object);
    begin {enter object into table}
       tx := tx + 1;
