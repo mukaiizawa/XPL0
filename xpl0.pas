@@ -130,16 +130,22 @@ begin if cx > cxmax then
            begin write(' program too long'); goto 99
            end;
    with code[cx] do
-      begin f := x; l := y; a := z
+      begin
+        f := x;
+        l := y;
+        a := z
       end;
    cx := cx + 1
 end {gen};
 
 procedure test(s1,s2: symset; n: integer);
-begin if not(sym in s1) then
-        begin error(n); s1 := s1 + s2;
-           while not(sym in s1) do getsym
-        end
+begin
+  if not(sym in s1) then
+  begin
+    error(n);
+    s1 := s1 + s2;
+    while not(sym in s1) do getsym
+  end
 end {test};
 
 procedure block(lev,tx: integer; fsys: symset);
@@ -165,11 +171,11 @@ procedure block(lev,tx: integer; fsys: symset);
    end {enter};
 
    function position(id: alfa): integer;
-      var i: integer;
+   var i: integer;
    begin {find indentifier id in table}
-      table[0].name := id; i := tx;
-      while table[i].name <> id do i := i-1;
-      position := i
+     table[0].name := id; i := tx;
+     while table[i].name <> id do i := i-1;
+     position := i
    end {position};
 
    procedure constdeclaration;
@@ -186,14 +192,11 @@ procedure block(lev,tx: integer; fsys: symset);
            enter(constant);
            getsym
          end
-         else
-           error(2)
+         else error(2)
        end
-       else
-         error(3)
+       else error(3)
      end
-     else
-       error(4)
+     else error(4)
    end {constdeclaration};
 
    procedure vardeclaration;
@@ -202,17 +205,17 @@ procedure block(lev,tx: integer; fsys: symset);
      begin
        enter(varible);
        getsym
-       end
-       else
-         error(4)
-         end {vardeclaration};
+     end
+     else
+       error(4)
+   end {vardeclaration};
 
    procedure listcode;
-      var i: integer;
+   var i: integer;
    begin {list code generated for this block}
-      for i := cx0 to cx-1 do
-         with code[i] do
-            writeln(i:5, mnemonic[f]:5, 1:3, a:5)
+     for i := cx0 to cx-1 do
+       with code[i] do
+         writeln(i:5, mnemonic[f]:5, 1:3, a:5)
    end {listcode};
 
    procedure statement(fsys: symset);
@@ -225,41 +228,55 @@ procedure block(lev,tx: integer; fsys: symset);
             var mulop: symbol;
 
             procedure factor(fsys: symset);
-               var i: integer;
-            begin test(facbegsys, fsys, 24);
-               while sym in facbegsys do
-               begin
-                  if sym = ident then
-                  begin i:= position(id);
-                     if i = 0 then error(11) else
-                     with table[i] do
-                     case kind of
-                        constant: gen(lit, 0, val);
-                        varible: gen(lod, lev-level, adr);
-                        proc: error(21)
-                     end;
-                     getsym
-                  end else
-                  if sym = number then
-                  begin if num >  amax then
-                           begin error(30); num := 0
-                           end;
-                     gen(lit, 0, num); getsym
-                  end else
-                  if sym = lparen then
-                  begin getsym; expression([rparen]+fsys);
-                     if sym = rparen then getsym else error(22)
-                  end;
-                  test(fsys, [lparen], 23)
-               end
+            var i: integer;
+            begin
+              test(facbegsys, fsys, 24);
+              while sym in facbegsys do
+              begin
+                if sym = ident then
+                begin
+                  i:= position(id);
+                  if i = 0 then error(11) else
+                  with table[i] do
+                    case kind of
+                    constant: gen(lit, 0, val);
+                    varible: gen(lod, lev-level, adr);
+                    proc: error(21)
+                end;
+                getsym
+              end
+              else if sym = number then
+              begin
+                if num >  amax then
+                begin
+                  error(30);
+                  num := 0
+                end;
+                gen(lit, 0, num);
+                getsym
+              end
+              else if sym = lparen then
+              begin
+                getsym;
+                expression([rparen]+fsys);
+                if sym = rparen then getsym
+                else error(22)
+              end;
+              test(fsys, [lparen], 23)
+            end
             end {factor};
 
-         begin {term} factor(fsys+[times, slash]);
-            while sym in [times, slash] do
-             begin mulop:=sym;getsym;factor(fsys+[times,slash]);
-              if mulop=times then gen(opr,0,4) else gen(opr,0,5)
-             end
-         end {term};
+            begin {term}
+              factor(fsys+[times, slash]);
+              while sym in [times, slash] do
+              begin
+                mulop := sym;
+                getsym;
+                factor(fsys + [times,slash]);
+                if mulop = times then gen(opr,0,4)
+                else gen(opr,0,5)
+              end
+            end {term};
 
       begin {expression}
          if sym in [plus, minus] then

@@ -29,11 +29,11 @@
 // no.of reserved words
 #define NORW 11
 
-// max.no. of digits in numbers
-#define NMAX 14
-
 // length of identifier table
 #define TXMAX 100
+
+// max.no. of digits in numbers
+#define NMAX 14
 
 // length of identifiers
 #define IMAX 10
@@ -43,6 +43,9 @@
 
 // maximum depth of block nesting
 #define LEVMAX 3
+
+// size of code array
+#define CMAX 200
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
@@ -74,6 +77,10 @@ enum fct {
   JPC     // JPC 0, a : jump conditional to a
 };
 
+char *mnemonic[] = {
+  "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
+};
+
 struct instruction {
   enum fct f;
   int l;
@@ -82,7 +89,7 @@ struct instruction {
 
 struct tnode {
   char *name;
-  enum object obj;
+  enum object kind;
   int val;
   int level;
   int adr;
@@ -94,37 +101,33 @@ static FILE *out;
 static char ch = 0x20;
 static int tx = 0;    // table contents
 static int dx = 0;
+static int cx = 0;    // code allocation index
 static enum symbol sym;
 static char *id;
 static int num;
 static char a[IMAX];
+static struct instruction code[CMAX];
 static char *word[NORW];
 static enum symbol wsym[NORW];
 static struct tnode table[TXMAX];
-// static enum symbol declbegsys[] = {constsym, varsym, procsym};
-// static enum symbol statbegsys[] = {beginsym, callsym, ifsym, whilesym};
-// static enum symbol facbegsys[] = {ident, number, lparen};
 
-int symsetlen(enum symbol *symset)
+static void error(int n)
 {
-  return sizeof(symset) / sizeof(symset[0]);
-}
-
-void error(int n)
-{
-  fprintf(stderr,"error: %d\n", n);
+  switch (n) {
+    case 98: fprintf(stderr, "illegal state\n");
+    case 99: fprintf(stderr, "program too long\n");
+    default: fprintf(stderr, "error: %d\n", n);
+  }
   exit(1);
 }
 
-void test(enum symbol *symset)
+static void gen(enum fct f, int l, int a)
 {
-  for (int i = 0; i < symsetlen(symset); i++)
-    if (sym == symset[i]) return;
-  fprintf(stderr, "symbol '%s' must be [", symbol_name[sym]);
-  for (int i = 0; i < symsetlen(symset); i++)
-    fprintf(stderr, " %s", symbol_name[symset[i]]);
-  fprintf(stderr, " ]\n");
-  error(0);
+  if (cx > CMAX) error(99);
+  code[cx].f = f;
+  code[cx].l = l;
+  code[cx].a = a;
+  cx++;
 }
 
 void nextch(void)
@@ -145,7 +148,7 @@ level: %d\t\
 address: %d\t\
 value: %d\
 ]\n\
-", table[i].name, table[i].obj, table[i].level, table[i].adr, table[i].val);
+", table[i].name, table[i].kind, table[i].level, table[i].adr, table[i].val);
   fprintf(out, "}\n");
 }
 
@@ -206,7 +209,7 @@ void getsym(void)
 static void enter(enum object o, int lev)
 {
   table[tx].name = id;
-  table[tx].obj = o;
+  table[tx].kind = o;
   switch (o) {
     case constant:
       assert(num < AMAX);
@@ -227,7 +230,7 @@ static void enter(enum object o, int lev)
 /*
  * find identifier id in table
  */
-static int position()
+static int position(void)
 {
   for (int i = 0; i < tx; i++)
     if (strcmp(table[i].name, id) == 0) return i;
@@ -235,14 +238,81 @@ static int position()
   return -1;    // never reached.
 }
 
-static int constdeclaration()
+void constdeclaration(int lev)
 {
-  assert(sym == ident);
+  if (sym != ident) error(4);
   getsym();
-  if (!sym == eql || sym == becomes) error(4);
+  if (sym != becomes) error(1);
+  if (sym != eql) error(3);
+  getsym();
+  if (sym != number) error(2);
+  enter(constant, lev);
+  getsym();
 }
 
-void block(int lev, enum symbol *symset)
+void vardeclaration(int lev)
+{
+  if (sym != ident) error(4);
+  enter(variable, lev);
+  getsym();
+}
+
+void listcode(int cx0)
+{
+  for (int i = cx0; i < cx - 1; i++)
+    printf("%d%s%d%d\n", i, mnemonic[code[i].f], 1, code[i].a);
+}
+
+static void expression(int lev);
+
+void factor(int lev)
+{
+  while (true) {
+    int pos;
+    switch (sym) {
+      case ident:
+        pos = position();
+        if (pos == 0) error(11);
+        switch (table[pos].kind) {
+          case constant: gen(LIT, 0, table[pos].val);
+          case variable: gen(LOD, lev - table[pos].level, table[pos].adr);
+          case proc: error(21);
+        }
+        getsym();
+        continue;
+      case number:
+        if (num > AMAX) error(30);
+        gen(LIT, 0, num);
+        getsym();
+        continue;
+      case lparen:
+        getsym();
+        expression(lev);
+        if (sym != rparen) error(22);
+        getsym();
+        continue;
+      default: break;
+    }
+    break;
+  }
+}
+
+void term(int lev)
+{
+  // symbol mulopp;
+}
+
+static void expression(int lev)
+{
+  // symbol addop;
+}
+
+void statement(int lev)
+{
+  // int cx1, cx2;
+}
+
+void block(int lev)
 {
   // int dx, tx0, cx0;
 }
@@ -275,7 +345,6 @@ int main (int argc, char **argv)
   wsym[10] = whilesym;
   getsym();
   fprintf(out, "%d\n", sym);
-  // test((enum symbol[]){ident, oddsym});
   id = "asd";
   enter(proc, 1);
   enter(proc, 1);
