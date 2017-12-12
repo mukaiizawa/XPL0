@@ -173,24 +173,39 @@ procedure block(lev,tx: integer; fsys: symset);
    end {position};
 
    procedure constdeclaration;
-   begin if sym = ident then
-      begin getsym;
-         if sym in [eql, becomes] then
-         begin if sym = becomes then error(1);
-            getsym;
-            if sym = number then
-               begin enter(constant); getsym
-               end
-            else error(2)
-         end else error(3)
-      end else error(4)
+   begin
+     if sym = ident then
+     begin
+       getsym;
+       if sym in [eql, becomes] then
+       begin
+         if sym = becomes then error(1);
+         getsym;
+         if sym = number then
+         begin
+           enter(constant);
+           getsym
+         end
+         else
+           error(2)
+       end
+       else
+         error(3)
+     end
+     else
+       error(4)
    end {constdeclaration};
 
    procedure vardeclaration;
-   begin if sym = ident then
-           begin enter(varible); getsym
-           end else error(4)
-   end {vardeclaration};
+   begin
+     if sym = ident then
+     begin
+       enter(varible);
+       getsym
+       end
+       else
+         error(4)
+         end {vardeclaration};
 
    procedure listcode;
       var i: integer;

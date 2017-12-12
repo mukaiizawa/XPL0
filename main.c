@@ -205,7 +205,6 @@ void getsym(void)
  */
 static void enter(enum object o, int lev)
 {
-  dump_table();
   table[tx].name = id;
   table[tx].obj = o;
   switch (o) {
@@ -234,6 +233,13 @@ static int position()
     if (strcmp(table[i].name, id) == 0) return i;
   error(1);
   return -1;    // never reached.
+}
+
+static int constdeclaration()
+{
+  assert(sym == ident);
+  getsym();
+  if (!sym == eql || sym == becomes) error(4);
 }
 
 void block(int lev, enum symbol *symset)
