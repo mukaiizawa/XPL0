@@ -95,21 +95,24 @@ struct tnode {
   int adr;
 };
 
+static char *word[NORW];
+static enum symbol wsym[NORW];
+static struct tnode table[TXMAX];
+
 static FILE *in;
 static FILE *out;
+
+// lex
+static enum symbol lex_sym;
+static int lex_num;
+static char lex_str[IMAX];
 
 static char ch = 0x20;
 static int tx = 0;    // table contents
 static int dx = 0;
 static int cx = 0;    // code allocation index
-static enum symbol sym;
-static char *id;
-static int num;
-static char a[IMAX];
 static struct instruction code[CMAX];
-static char *word[NORW];
-static enum symbol wsym[NORW];
-static struct tnode table[TXMAX];
+
 
 static void error(int n)
 {
@@ -156,49 +159,49 @@ void getsym(void)
 {
   while (isspace(ch)) nextch();
   if (isalpha(ch)) {
-    sym = ident;
+    lex_sym = ident;
     for (int i = 0; isalnum(ch); i++) {
       assert(i < IMAX);
-      a[i] = ch;
+      lex_str[i] = ch;
+      lex_str[i + 1] = '\0';
       nextch();
     }
-    id = a;
     for (int i = 0; i < NORW; i++)
-      if (strcmp(id, word[i]) == 0) {
-        sym = wsym[i];
+      if (strcmp(lex_str, word[i]) == 0) {
+        lex_sym = wsym[i];
         break;
       }
   } else if (isdigit(ch)) {
-    num = 0;
-    sym = number;
+    lex_num = 0;
+    lex_sym = number;
     while (isdigit(ch)) {
-      num = 10 * num + (ch - '0');
+      lex_num = 10 * lex_num + (ch - '0');
       nextch();
     }
   } else {
     switch (ch) {
-      case '+': sym = plus; break;
-      case '-': sym = minus; break;
-      case '*': sym = times; break;
-      case '/': sym = slash; break;
-      case '(': sym = lparen; break;
-      case ')': sym = rparen; break;
-      case '=': sym = eql; break;
-      case ',': sym = comma; break;
-      case '.': sym = period; break;
-      case '#': sym = neq; break;
-      case '<': sym = lss; break;
-      case '>': sym = gtr; break;
-      case '[': sym = leq; break;
-      case ']': sym = geq; break;
-      case ';': sym = semicolon; break;
+      case '+': lex_sym = plus; break;
+      case '-': lex_sym = minus; break;
+      case '*': lex_sym = times; break;
+      case '/': lex_sym = slash; break;
+      case '(': lex_sym = lparen; break;
+      case ')': lex_sym = rparen; break;
+      case '=': lex_sym = eql; break;
+      case ',': lex_sym = comma; break;
+      case '.': lex_sym = period; break;
+      case '#': lex_sym = neq; break;
+      case '<': lex_sym = lss; break;
+      case '>': lex_sym = gtr; break;
+      case '[': lex_sym = leq; break;
+      case ']': lex_sym = geq; break;
+      case ';': lex_sym = semicolon; break;
       case ':':
         nextch();
         if (ch == '=') {
-          sym = becomes;
+          lex_sym = becomes;
           break;
         }
-      default: sym = nil;
+      default: lex_sym = nil;
     }
   }
 }
@@ -208,12 +211,12 @@ void getsym(void)
  */
 static void enter(enum object o, int lev)
 {
-  table[tx].name = id;
+  table[tx].name = lex_str;
   table[tx].kind = o;
   switch (o) {
     case constant:
-      assert(num < AMAX);
-      table[tx].val = num;
+      assert(lex_num < AMAX);
+      table[tx].val = lex_num;
       break;
     case variable:
       table[tx].level = lev;
@@ -233,26 +236,26 @@ static void enter(enum object o, int lev)
 static int position(void)
 {
   for (int i = 0; i < tx; i++)
-    if (strcmp(table[i].name, id) == 0) return i;
+    if (strcmp(table[i].name, lex_str) == 0) return i;
   error(1);
   return -1;    // never reached.
 }
 
 void constdeclaration(int lev)
 {
-  if (sym != ident) error(4);
+  if (lex_sym != ident) error(4);
   getsym();
-  if (sym != becomes) error(1);
-  if (sym != eql) error(3);
+  if (lex_sym != becomes) error(1);
+  if (lex_sym != eql) error(3);
   getsym();
-  if (sym != number) error(2);
+  if (lex_sym != number) error(2);
   enter(constant, lev);
   getsym();
 }
 
 void vardeclaration(int lev)
 {
-  if (sym != ident) error(4);
+  if (lex_sym != ident) error(4);
   enter(variable, lev);
   getsym();
 }
@@ -269,7 +272,7 @@ void factor(int lev)
 {
   while (true) {
     int pos;
-    switch (sym) {
+    switch (lex_sym) {
       case ident:
         pos = position();
         if (pos == 0) error(11);
@@ -281,14 +284,14 @@ void factor(int lev)
         getsym();
         continue;
       case number:
-        if (num > AMAX) error(30);
-        gen(LIT, 0, num);
+        if (lex_num > AMAX) error(30);
+        gen(LIT, 0, lex_num);
         getsym();
         continue;
       case lparen:
         getsym();
         expression(lev);
-        if (sym != rparen) error(22);
+        if (lex_sym != rparen) error(22);
         getsym();
         continue;
       default: break;
@@ -344,8 +347,11 @@ int main (int argc, char **argv)
   wsym[9] = varsym;
   wsym[10] = whilesym;
   getsym();
-  fprintf(out, "%d\n", sym);
-  id = "asd";
+  fprintf(out, "%d\n", lex_sym);
+  lex_str[0] = 'a';
+  lex_str[1] = 's';
+  lex_str[2] = 'd';
+  lex_str[3] = '\0';
   enter(proc, 1);
   enter(proc, 1);
   printf("pos: %d\n", position());
