@@ -29,4 +29,4 @@ xpl0: main.o
 	$(link)
 
 clean:
-	rm -f *.o *.exe
+	rm -f *.o *.exe xpl0

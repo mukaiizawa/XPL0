@@ -50,6 +50,13 @@ enum symbol {
   procsym, rparen, semicolon, slash, thensym, times, varsym, whilesym
 };
 
+char *symbol_name[] = {
+  ":=", "begin", "call", ",", "const", "do", "end",
+  "=", "[", ">", "ident", "if", "[", "(", "<", "-",
+  "#", "nil", "number", "odd", "period", "+", "procedure", ")",
+  ";", "/", "then", "*", "var", "while"
+};
+
 enum object {
   constant,
   variable,
@@ -85,7 +92,7 @@ static FILE *in;
 static FILE *out;
 
 static char ch = 0x20;
-static int tx = 0;
+static int tx = 0;    // table contents
 static int dx = 0;
 static enum symbol sym;
 static char *id;
@@ -113,9 +120,9 @@ void test(enum symbol *symset)
 {
   for (int i = 0; i < symsetlen(symset); i++)
     if (sym == symset[i]) return;
-  fprintf(stderr, "symbol %d must be[", sym);
+  fprintf(stderr, "symbol '%s' must be [", symbol_name[sym]);
   for (int i = 0; i < symsetlen(symset); i++)
-    fprintf(stderr, " %d", symset[i]);
+    fprintf(stderr, " %s", symbol_name[symset[i]]);
   fprintf(stderr, " ]\n");
   error(0);
 }
@@ -129,13 +136,17 @@ void nextch(void)
 
 void dump_table(void)
 {
-  printf("table {");
-  for (int i = 0; i < tx; i++) {
-    printf("\tlevel: %d\n", table[i].level);
-    printf("\tadr: %d\n", table[i].adr);
-    printf("\tval: %d\n", table[i].val);
-  }
-  printf("}");
+  fprintf(out, "table {\n");
+  for (int i = 0; i < tx; i++)
+    fprintf(out, "\t[\
+name: %s\t\
+obect: %d\t\
+level: %d\t\
+address: %d\t\
+value: %d\
+]\n\
+", table[i].name, table[i].obj, table[i].level, table[i].adr, table[i].val);
+  fprintf(out, "}\n");
 }
 
 void getsym(void)
@@ -189,9 +200,12 @@ void getsym(void)
   }
 }
 
+/*
+ * enter symbol table
+ */
 static void enter(enum object o, int lev)
 {
-  tx++;
+  dump_table();
   table[tx].name = id;
   table[tx].obj = o;
   switch (o) {
@@ -207,6 +221,8 @@ static void enter(enum object o, int lev)
       table[tx].level = lev;
       break;
   }
+  tx++;
+  dump_table();
 }
 
 /*
@@ -229,17 +245,17 @@ int main (int argc, char **argv)
 {
   in = stdin;
   out = stdout;
-  word[0] = "begin";
-  word[1] = "call";
-  word[2] = "const";
-  word[3] = "do";
-  word[4] = "end";
-  word[5] = "if";
-  word[6] = "odd";
-  word[7] = "procedure";
-  word[8] = "then";
-  word[9] = "var";
-  word[10] = "while";
+  word[0] = symbol_name[beginsym];
+  word[1] = symbol_name[callsym];
+  word[2] = symbol_name[constsym];
+  word[3] = symbol_name[dosym];
+  word[4] = symbol_name[endsym];
+  word[5] = symbol_name[ifsym];
+  word[6] = symbol_name[oddsym];
+  word[7] = symbol_name[procsym];
+  word[8] = symbol_name[thensym];
+  word[9] = symbol_name[varsym];
+  word[10] = symbol_name[whilesym];
   wsym[0] = beginsym;
   wsym[1] = callsym;
   wsym[2] = constsym;
@@ -253,10 +269,10 @@ int main (int argc, char **argv)
   wsym[10] = whilesym;
   getsym();
   fprintf(out, "%d\n", sym);
-  test((enum symbol[]){ident, oddsym});
+  // test((enum symbol[]){ident, oddsym});
   id = "asd";
-  enter(variable, 2);
-  dump_table();
-  printf("%d\n", position());
+  enter(proc, 1);
+  enter(proc, 1);
+  printf("pos: %d\n", position());
   return 0;
 }
