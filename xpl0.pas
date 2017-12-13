@@ -10,12 +10,12 @@ program pl0(input,output);
 label 99;
 
 const norw = 11;     {no. of reserved words}
-   txmax = 100;      {length of identifier table}
-   nmax = 14;        {max. no. of digits in numbers}
-   al = 10;          {length of identifiers}
-   amax = 2047;      {maximum address}
-   levmax = 3;       {maximum depth of block nesting}
-   cxmax = 200;      {size of code array}
+      txmax = 100;   {length of identifier table}
+      nmax = 14;     {max. no. of digits in numbers}
+      al = 10;       {length of identifiers}
+      amax = 2047;   {maximum address}
+      levmax = 3;    {maximum depth of block nesting}
+      cxmax = 200;   {size of code array}
 
 type symbol =
    (nul,ident,number,plus,minus,times,slash,oddsym,
@@ -66,76 +66,101 @@ var ch: char;         {last character read}
            end;
 
 procedure error(n: integer);
-begin writeln(' ****',' ': cc-1, '^',n: 2); err := err+1
+begin
+  writeln(' ****',' ': cc-1, '^',n: 2);
+  err := err+1
 end {error};
 
 procedure getsym;
-   var i,j,k: integer;
+var i,j,k: integer;
 
-   procedure getch;
-   begin if cc = ll then
-      begin if eof(input) then
-                 begin write(' program incomplete'); goto 99
-                 end;
-         ll := 0; cc := 0; write(cx: 5,' ');
-         while not eoln(input) do
-            begin ll := ll+1; read(ch); write(ch); line[ll]:=ch
-            end;
-         writeln; readln; ll := ll + 1; line[ll] := ' ';
+  procedure getch;
+  begin
+    if cc = ll then
+    begin
+      if eof(input) then
+      begin
+        write(' program incomplete');
+        goto 99
       end;
-      cc := cc+1; ch := line[cc]
-   end {getch};
+      ll := 0;
+      cc := 0;
+      write(cx: 5,' ');
+      while not eoln(input) do
+      begin
+        ll := ll+1;
+        read(ch);
+        write(ch);
+        line[ll]:=ch
+      end;
+      writeln;
+      readln;
+      ll := ll + 1;
+      line[ll] := ' ';
+    end;
+    cc := cc+1; ch := line[cc]
+  end {getch};
 
 begin {getsym}
-   while ch  = ' ' do getch;
-   if ch in ['a'..'z'] then
-   begin {identifier or reserved word} k := 0;
-      repeat
-         if k < al then
-           begin
-             k := k+1;
-             a[k] := ch
-           end;
-         getch;
-      until not(ch in ['a'..'z','0'..'9']);
-      if k >= kk then kk := k else
-         repeat a[kk] := ' '; kk := kk-1
-         until kk = k;
-      id := a; i := 1; j := norw;
-      repeat k := (i+j) div 2;
-         if id <= word[k] then j := k-1;
-         if id >= word[k] then i := k+1
-      until i > j;
-      if i-1 > j then sym := wsym[k] else sym := ident
-   end else
-   if ch in ['0'..'9'] then
-   begin {number} k := 0; num := 0; sym := number;
-      repeat num := 10*num + (ord(ch)-ord('0'));
-         k := k+1; getch
-      until not(ch in ['0'..'9']);
-      if k > nmax then error(30)
-   end else
-   if ch = ':' then
-   begin getch;
-      if ch = '=' then
-      begin sym := becomes; getch
-      end else sym := nul;
-   end else
-   begin sym := ssym[ch]; getch
-   end
+  while ch  = ' ' do getch;
+  if ch in ['a'..'z'] then
+  begin {identifier or reserved word}
+    k := 0;
+    repeat
+      if k < al then begin k := k+1; a[k] := ch end;
+      getch;
+    until not(ch in ['a'..'z','0'..'9']);
+    if k >= kk then kk := k
+    else
+    repeat
+      a[kk] := ' '; kk := kk-1
+    until kk = k;
+    id := a; i := 1; j := norw;
+    repeat
+      k := (i+j) div 2;
+      if id <= word[k] then j := k-1;
+      if id >= word[k] then i := k+1
+    until i > j;
+    if i-1 > j then sym := wsym[k]
+    else sym := ident
+  end
+  else if ch in ['0'..'9'] then
+  begin {number}
+    k := 0; num := 0; sym := number;
+    repeat
+      num := 10 * num + (ord(ch)-ord('0'));
+      k := k+1; getch
+    until not(ch in ['0'..'9']);
+    if k > nmax then error(30)
+  end
+  else if ch = ':' then
+  begin
+    getch;
+    if ch = '=' then
+    begin
+      sym := becomes;
+      getch
+    end
+    else sym := nul;
+  end
+  else
+  begin
+    sym := ssym[ch];
+    getch
+  end
 end {getsym};
 
 procedure gen(x: fct; y,z: integer);
-begin if cx > cxmax then
-           begin write(' program too long'); goto 99
-           end;
-   with code[cx] do
-      begin
-        f := x;
-        l := y;
-        a := z
-      end;
-   cx := cx + 1
+begin
+  if cx > cxmax then
+  begin
+    write(' program too long'); goto 99
+  end;
+  with code[cx] do
+  begin
+    f := x; l := y; a := z
+  end;
+  cx := cx + 1
 end {gen};
 
 procedure test(s1,s2: symset; n: integer);
@@ -153,22 +178,26 @@ procedure block(lev,tx: integer; fsys: symset);
       tx0: integer;     {initial table index}
       cx0: integer;     {initial code index}
 
-   procedure enter(k: object);
-   begin {enter object into table}
-      tx := tx + 1;
-      with table[tx] do
-      begin name := id; kind := k;
-         case k of
-         constant: begin if num > amax then
-                              begin error(30); num :=0 end;
-                      val := num
-                   end;
-         varible: begin level := lev; adr := dx; dx := dx + 1;
-                  end;
-         proc: level := lev
-         end
+  procedure enter(k: object);
+  begin {enter object into table}
+    tx := tx + 1;
+    with table[tx] do
+    begin
+      name := id; kind := k;
+      case k of
+        constant:
+        begin
+          if num > amax then begin error(30); num :=0 end;
+          val := num
+        end;
+        varible:
+        begin
+          level := lev; adr := dx; dx := dx + 1;
+        end;
+        proc: level := lev
       end
-   end {enter};
+    end
+  end {enter};
 
    function position(id: alfa): integer;
    var i: integer;
@@ -236,34 +265,34 @@ procedure block(lev,tx: integer; fsys: symset);
                 if sym = ident then
                 begin
                   i:= position(id);
-                  if i = 0 then error(11) else
-                  with table[i] do
+                  if i = 0 then error(11)
+                  else with table[i] do
                     case kind of
-                    constant: gen(lit, 0, val);
-                    varible: gen(lod, lev-level, adr);
-                    proc: error(21)
-                end;
-                getsym
-              end
-              else if sym = number then
-              begin
-                if num >  amax then
+                      constant: gen(lit, 0, val);
+                      varible: gen(lod, lev-level, adr);
+                      proc: error(21)
+                    end;
+                  getsym
+                end
+                else if sym = number then
                 begin
-                  error(30);
-                  num := 0
+                  if num >  amax then
+                  begin
+                    error(30);
+                    num := 0
+                  end;
+                  gen(lit, 0, num);
+                  getsym
+                end
+                else if sym = lparen then
+                begin
+                  getsym;
+                  expression([rparen]+fsys);
+                  if sym = rparen then getsym
+                  else error(22)
                 end;
-                gen(lit, 0, num);
-                getsym
+                test(fsys, [lparen], 23)
               end
-              else if sym = lparen then
-              begin
-                getsym;
-                expression([rparen]+fsys);
-                if sym = rparen then getsym
-                else error(22)
-              end;
-              test(fsys, [lparen], 23)
-            end
             end {factor};
 
             begin {term}
@@ -297,26 +326,33 @@ procedure block(lev,tx: integer; fsys: symset);
               end
             end {expression};
 
-      procedure condition(fsys: symset);
-         var relop: symbol;
-      begin
-         if sym  = oddsym then
-         begin getsym; expression(fsys); gen(opr, 0, 6)
-         end else
-         begin expression([eql, neq, lss, gtr, leq, geq]+fsys);
-            if not(sym in [eql, neq, lss, leq, gtr, geq]) then
-               error(20) else
-            begin relop := sym; getsym; expression(fsys);
-               case relop of
+            procedure condition(fsys: symset);
+            var relop: symbol;
+            begin
+              if sym  = oddsym then
+              begin
+                getsym;
+                expression(fsys); gen(opr, 0, 6)
+              end
+              else
+              begin
+                expression([eql, neq, lss, gtr, leq, geq]+fsys);
+                if not(sym in [eql, neq, lss, leq, gtr, geq]) then error(20)
+                else
+                begin
+                  relop := sym;
+                  getsym;
+                  expression(fsys);
+                  case relop of
                   eql: gen(opr, 0, 8);
                   neq: gen(opr, 0, 9);
                   lss: gen(opr, 0, 10);
                   geq: gen(opr, 0, 11);
                   gtr: gen(opr, 0, 12);
                   leq: gen(opr, 0, 13);
-               end
+                end
+              end
             end
-         end
       end {condition};
 
    begin {statement}

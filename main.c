@@ -14,7 +14,7 @@
  *                   | 'while' <condition> 'do' <statement> ]
  * <condition> ::= 'odd' <expression>
  *                   | <expression> ('='|'#'|'<'|'<='|'>'|'>=') <expression>
- * <Expression> ::= [ '+' | '-' ] <term> { ( '+' | '-' ) <term> }
+ * <expression> ::= [ '+' | '-' ] <term> { ( '+' | '-' ) <term> }
  * <term> ::= <factor> { ( '*' | '/' ) <factor> }
  * <factor> ::= ident | number | '(' <expression> ')'
  */
@@ -328,6 +328,11 @@ static void expression(int lev)
     if (addop == plus) gen(OPR, 0, 2);
     else gen(OPR, 0, 3);
   }
+}
+
+void condition(int lev)
+{
+  // int cx1, cx2;
 }
 
 void statement(int lev)
