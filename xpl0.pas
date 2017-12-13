@@ -278,16 +278,24 @@ procedure block(lev,tx: integer; fsys: symset);
               end
             end {term};
 
-      begin {expression}
-         if sym in [plus, minus] then
-            begin addop := sym; getsym; term(fsys+[plus,minus]);
-               if addop = minus then gen(opr, 0,1)
-            end else term(fsys+[plus, minus]);
-         while sym in [plus, minus] do
-            begin addop := sym; getsym; term(fsys+[plus,minus]);
-               if addop=plus then gen(opr,0,2) else gen(opr,0,3)
-            end
-      end {expression};
+            begin {expression}
+              if sym in [plus, minus] then
+              begin
+                addop := sym;
+                getsym;
+                term(fsys+[plus,minus]);
+                if addop = minus then gen(opr, 0,1)
+              end
+              else term(fsys+[plus, minus]);
+              while sym in [plus, minus] do
+              begin
+                addop := sym;
+                getsym;
+                term(fsys+[plus,minus]);
+                if addop=plus then gen(opr,0,2)
+                else gen(opr,0,3)
+              end
+            end {expression};
 
       procedure condition(fsys: symset);
          var relop: symbol;

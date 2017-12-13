@@ -67,14 +67,14 @@ enum object {
 };
 
 enum fct {
-  LIT,    // LIT 0, a : load constant a
-  OPR,    // OPR 0, a : execute operation a
-  LOD,    // LOD l, a : load variable l, a
-  STO,    // STO l, a : store variable l, a
-  CAL,    // CAL l, a : call procedure a at level l
-  INT,    // INT 0, a : increment t-regeister by a
-  JMP,    // JMP 0, a : jump to a
-  JPC     // JPC 0, a : jump conditional to a
+  LIT,    // [LIT, 0, a] load constant a
+  OPR,    // [OPR, 0, a] execute operation a
+  LOD,    // [LOD, l, a] load variable l, a
+  STO,    // [STO, l, a] store variable l, a
+  CAL,    // [CAL, l, a] call procedure a at level l
+  INT,    // [INT, 0, a] increment t-regeister by a
+  JMP,    // [JMP, 0, a] jump to a
+  JPC     // [JPC, 0, a] jump conditional to a
 };
 
 char *mnemonic[] = {
@@ -102,7 +102,6 @@ static struct tnode table[TXMAX];
 static FILE *in;
 static FILE *out;
 
-// lex
 static enum symbol lex_sym;
 static int lex_num;
 static char lex_str[IMAX];
@@ -270,44 +269,65 @@ static void expression(int lev);
 
 void factor(int lev)
 {
-  while (true) {
-    int pos;
+  while (lex_sym == ident || lex_sym == number || lex_sym == lparen) {
     switch (lex_sym) {
       case ident:
-        pos = position();
-        if (pos == 0) error(11);
-        switch (table[pos].kind) {
-          case constant: gen(LIT, 0, table[pos].val);
-          case variable: gen(LOD, lev - table[pos].level, table[pos].adr);
-          case proc: error(21);
+        {
+          int pos;
+          if ((pos = position()) == 0) error(11);
+          switch (table[pos].kind) {
+            case constant: gen(LIT, 0, table[pos].val);
+            case variable: gen(LOD, lev - table[pos].level, table[pos].adr);
+            case proc: error(21);
+          }
+          getsym();
+          break;
         }
-        getsym();
-        continue;
       case number:
         if (lex_num > AMAX) error(30);
         gen(LIT, 0, lex_num);
         getsym();
-        continue;
+        break;
       case lparen:
-        getsym();
+        getsym();    // (
         expression(lev);
         if (lex_sym != rparen) error(22);
-        getsym();
-        continue;
-      default: break;
+        getsym();    // )
+        break;
+      default: error(-1);
     }
-    break;
   }
 }
 
 void term(int lev)
 {
-  // symbol mulopp;
+  enum symbol mulopp;
+  while (lex_sym == times || lex_sym == slash) {
+    mulopp = lex_sym;
+    getsym();
+    factor(lev);
+    if (mulopp == times) gen(OPR, 0, 4);
+    else gen(OPR, 0, 5);
+  }
 }
 
 static void expression(int lev)
 {
-  // symbol addop;
+  enum symbol addop;
+  if (lex_sym != plus && lex_sym != minus) term(lev);
+  else {
+    addop = lex_sym;
+    getsym();
+    term(lev);
+    if (addop == minus) gen(OPR, 0, 1);
+  }
+  while (lex_sym == plus || lex_sym == minus) {
+    addop = lex_sym;
+    getsym();
+    term(lev);
+    if (addop == plus) gen(OPR, 0, 2);
+    else gen(OPR, 0, 3);
+  }
 }
 
 void statement(int lev)
