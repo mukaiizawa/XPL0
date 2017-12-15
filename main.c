@@ -332,7 +332,36 @@ static void expression(int lev)
 
 void condition(int lev)
 {
-  // int cx1, cx2;
+  enum symbol relop;
+  if (lex_sym == oddsym) {
+    getsym();
+    expression(lev);
+    gen(OPR, 0, 6);
+  } else {
+    expression(lev);
+    switch (lex_sym) {
+      case eql:
+      case neq:
+      case lss:
+      case leq:
+      case gtr:
+      case geq:
+        break;
+      default: error(20);
+    }
+    relop = lex_sym;
+    getsym();
+    expression(lev);
+    switch (relop) {
+      case eql: gen(OPR, 0, 8); break;
+      case neq: gen(OPR, 0, 9); break;
+      case lss: gen(OPR, 0, 10); break;
+      case geq: gen(OPR, 0, 11); break;
+      case gtr: gen(OPR, 0, 12); break;
+      case leq: gen(OPR, 0, 13); break;
+      default: error(20);
+    }
+  }
 }
 
 void statement(int lev)
