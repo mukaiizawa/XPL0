@@ -115,11 +115,36 @@ static struct instruction code[CMAX];
 
 static void error(int n)
 {
+  char* msg = NULL;
   switch (n) {
-    case 98: fprintf(stderr, "illegal state\n");
-    case 99: fprintf(stderr, "program too long\n");
-    default: fprintf(stderr, "error: %d\n", n);
+    case 1: msg = "Use '=' instead of ':='"; break;
+    case 2: msg = "'=' must be followed by a number"; break;
+    case 3: msg = "Identifier must be followed by '='"; break;
+    case 4: msg = "'const', 'var', 'procedure' must be followed by identifier";
+            break;
+    case 5: msg = "';' or ',' missing"; break;
+    case 6: msg = "Incorrect symbol after procedure declaration"; break;
+    case 7: msg = "Statement expecte"; break;
+    case 8: msg = "Incorrect symbol after statement part in block"; break;
+    case 9: msg = "'.' expected"; break;
+    case 10: msg = "';' between statements missing"; break;
+    case 11: msg = "Undeclared identifier"; break;
+    case 12: msg = "Assignment to constant or procedure is not allowed"; break;
+    case 13: msg = "':=' expected"; break;
+    case 14: msg = "call must be followed by an identifie"; break;
+    case 15: msg = "Call of a constant or variable is meaningless"; break;
+    case 16: msg = "'then' expecte"; break;
+    case 17: msg = "';' or 'end' expecte"; break;
+    case 18: msg = "'do' expecte"; break;
+    case 19: msg = "Incorrect symbol following statement"; break;
+    case 20: msg = "Relational operator expected"; break;
+    case 21: msg = "Expression must not contain a procedure identifier"; break;
+    case 22: msg = "Right parenthesis missing"; break;
+    case 23: msg = "An expression cannot begin with this symbol"; break;
+    case 30: msg = "This number is too large"; break;
+    default: msg = "error";
   }
+  fprintf(stderr, "%s.\n", msg);
   exit(1);
 }
 
@@ -400,6 +425,7 @@ int main (int argc, char **argv)
   wsym[8] = thensym;
   wsym[9] = varsym;
   wsym[10] = whilesym;
+  error(20);
   getsym();
   fprintf(out, "%d\n", lex_sym);
   lex_str[0] = 'a';
