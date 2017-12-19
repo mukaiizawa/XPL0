@@ -428,47 +428,65 @@ begin {block}
   if lev > levmax then error(32);
   repeat
     if sym = constsym then
-    begin getsym;
-      repeat constdeclaration;
+    begin
+      getsym;
+      repeat
+        constdeclaration;
         while sym = comma do
-        begin getsym; constdeclaration
-          end;
-          if sym = semicolon then getsym else error(5)
+        begin
+          getsym;
+          constdeclaration
+        end;
+        if sym = semicolon then getsym
+        else error(5)
       until sym <> ident
     end;
     if sym = varsym then
-    begin getsym;
-      repeat vardeclaration;
+    begin
+      getsym;
+      repeat
+        vardeclaration;
         while sym = comma do
-        begin getsym; vardeclaration
-          end;
-          if sym = semicolon then getsym else error(5)
+        begin
+          getsym;
+          vardeclaration
+        end;
+        if sym = semicolon then getsym
+        else error(5)
       until sym <> ident;
     end;
     while sym = procsym do
-    begin getsym;
+    begin
+      getsym;
       if sym = ident then
-      begin enter(proc); getsym
-        end
-        else error(4);
-        if sym = semicolon then getsym else error(5);
-        block(lev+1, tx, [semicolon]+fsys);
-        if sym = semicolon then
-        begin getsym;test(statbegsys+[ident,procsym],fsys,6)
-          end
-          else error(5)
+      begin
+        enter(proc);
+        getsym
+      end
+      else error(4);
+      if sym = semicolon then getsym
+      else error(5);
+      block(lev+1, tx, [semicolon]+fsys);
+      if sym = semicolon then
+      begin
+        getsym;
+        test(statbegsys+[ident,procsym],fsys,6)
+      end
+      else error(5)
     end;
     test(statbegsys+[ident], declbegsys, 7)
   until not(sym in declbegsys);
   code[table[tx0].adr].a := cx;
   with table[tx0] do
-  begin adr := cx; {start adr of code}
-    end;
-    cx0 := 0{cx}; gen(int, 0, dx);
-    statement([semicolon, endsym]+fsys);
-    gen(opr, 0, 0); {return}
-    test(fsys, [], 8);
-    listcode;
+  begin
+    adr := cx; {start adr of code}
+  end;
+  cx0 := 0{cx};
+  gen(int, 0, dx);
+  statement([semicolon, endsym]+fsys);
+  gen(opr, 0, 0); {return}
+  test(fsys, [], 8);
+  listcode;
 end {block};
 
 procedure interpret;

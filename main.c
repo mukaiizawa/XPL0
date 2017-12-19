@@ -449,7 +449,19 @@ void statement(int lev)
 
 void block(int lev)
 {
-  // int dx, tx0, cx0;
+  int dx, tx0, cx0;
+  dx = 3;
+  tx0 = tx;
+  table[tx].adr = cx;
+  gen(JMP, 0, 0);
+  if (lev > LEVMAX) error(32);
+  do {
+  } while (lex_sym == constsym || lex_sym == varsym || lex_sym == procsym);
+  table[tx0].adr = cx;    // start address of code
+  cx0 = 0;
+  gen(INT, 0, dx);
+  statement(lev);
+  listcode(cx0);
 }
 
 int main (int argc, char **argv)
