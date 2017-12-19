@@ -349,52 +349,82 @@ procedure block(lev,tx: integer; fsys: symset);
 
   begin {statement}
     if sym = ident then
-    begin i := position(id);
-      if i = 0 then error(11) else
-      if table[i].kind <> varible then
-      begin {assignment to non-varible} error(12); i := 0
-        end;
-        getsym; if sym = becomes then getsym else error(13);
-        expression(fsys);
-        if i <> 0 then
-        with table[i] do gen(sto, lev-level, adr)
-    end else
-    if sym = callsym then
-    begin getsym;
-      if sym <> ident then error(14) else
-      begin i := position(id);
-        if i = 0 then error(11) else
+    begin
+      i := position(id);
+      if i = 0 then error(11)
+      else if table[i].kind <> varible then
+      begin {assignment to non-varible}
+        error(12);
+        i := 0
+      end;
+      getsym;
+      if sym = becomes then getsym
+      else error(13);
+      expression(fsys);
+      if i <> 0 then
+      with table[i] do gen(sto, lev-level, adr)
+    end
+    else if sym = callsym then
+    begin
+      getsym;
+      if sym <> ident then error(14)
+      else
+      begin
+        i := position(id);
+        if i = 0 then
+        error(11)
+        else
         with table[i] do
         if kind=proc then gen(cal, lev-level, adr)
         else error(15);
         getsym
       end
-    end else
-    if sym = ifsym then
-    begin getsym; condition([thensym, dosym]+fsys);
-      if sym = thensym then getsym else error(16);
-      cx1 := cx; gen(jpc, 0, 0);
-      statement(fsys); code[cx1].a := cx
-    end else
-    if sym = beginsym then
-    begin getsym; statement([semicolon, endsym]+fsys);
+    end
+    else if sym = ifsym then
+    begin
+      getsym;
+      condition([thensym, dosym]+fsys);
+      if sym = thensym then getsym
+      else error(16);
+      cx1 := cx;
+      gen(jpc, 0, 0);
+      statement(fsys);
+      code[cx1].a := cx
+    end
+    else if sym = beginsym then
+    begin
+      getsym;
+      statement([semicolon, endsym]+fsys);
       while sym in [semicolon]+statbegsys do
       begin
-        if sym = semicolon then getsym else error(10);
+        if sym = semicolon then getsym
+        else error(10);
         statement([semicolon, endsym]+fsys)
       end;
-      if sym = endsym then getsym else error(17)
-    end else
-    if sym = whilesym then
-    begin cx1 := cx; getsym; condition([dosym]+fsys);
-      cx2 := cx; gen(jpc, 0, 0);
-      if sym = dosym then getsym else error(18);
-      statement(fsys); gen(jmp, 0, cx1); code[cx2].a := cx
+      if sym = endsym then getsym
+      else error(17)
+    end
+    else if sym = whilesym then
+    begin
+      cx1 := cx;
+      getsym;
+      condition([dosym]+fsys);
+      cx2 := cx;
+      gen(jpc, 0, 0);
+      if sym = dosym then getsym
+      else error(18);
+      statement(fsys);
+      gen(jmp, 0, cx1);
+      code[cx2].a := cx
     end;
     test(fsys, [], 19)
   end {statement};
 
-begin {block} dx:=3; tx0:=tx; table[tx].adr:=cx; gen(jmp,0,0);
+begin {block}
+  dx:=3;
+  tx0:=tx;
+  table[tx].adr:=cx;
+  gen(jmp,0,0);
   if lev > levmax then error(32);
   repeat
     if sym = constsym then

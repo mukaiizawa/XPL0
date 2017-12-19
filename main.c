@@ -365,13 +365,7 @@ void condition(int lev)
   } else {
     expression(lev);
     switch (lex_sym) {
-      case eql:
-      case neq:
-      case lss:
-      case leq:
-      case gtr:
-      case geq:
-        break;
+      case eql: case neq: case lss: case leq: case gtr: case geq: break;
       default: error(20);
     }
     relop = lex_sym;
@@ -391,7 +385,66 @@ void condition(int lev)
 
 void statement(int lev)
 {
-  // int cx1, cx2;
+  int cx1, cx2;
+  int pos = 0;
+  switch (lex_sym) {
+    case ident:
+      pos = position();
+      if (pos == 0) error(11);
+      else if (table[pos].kind != variable) error(12);
+      getsym();
+      if (lex_sym == becomes) getsym();
+      else error(13);
+      expression(lev);
+      gen(STO, lev - table[pos].level, table[pos].adr);
+      break;
+    case callsym:
+      getsym();
+      if (lex_sym != ident) error(14);
+      pos = position();
+      if (pos == 0) error(11);
+      if (table[pos].kind != proc) error(15);
+      gen(CAL, lev - table[pos].level, table[pos].adr);
+      getsym();
+      break;
+    case ifsym:
+      getsym();
+      condition(lev);
+      if (lex_sym != thensym) error(16);
+      cx1 = cx;
+      gen(JPC, 0, 0);
+      statement(lev);
+      code[cx1].a = cx;
+      break;
+    case beginsym:
+      getsym();
+      statement(lev);
+      while (lex_sym == semicolon
+          || lex_sym == beginsym
+          || lex_sym == callsym
+          || lex_sym == ifsym
+          || lex_sym == whilesym)
+      {
+        if (lex_sym != semicolon) error(10);
+        getsym();
+        statement(lev);
+      }
+      if (lex_sym != endsym) error(17);
+      getsym();
+    case whilesym:
+      cx1 = cx;
+      getsym();
+      condition(lev);
+      cx2 = cx;
+      gen(JPC, 0, 0);
+      if (lex_sym != dosym) error(18);
+      getsym();
+      statement(lev);
+      gen(JMP, 0, cx1);
+      code[cx2].a = cx;
+      break;
+    default: error(99);
+  }
 }
 
 void block(int lev)
