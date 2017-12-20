@@ -54,10 +54,9 @@ enum symbol {
 };
 
 char *symbol_name[] = {
-  ":=", "begin", "call", ",", "const", "do", "end",
-  "=", "[", ">", "ident", "if", "[", "(", "<", "-",
-  "#", "nil", "number", "odd", "period", "+", "procedure", ")",
-  ";", "/", "then", "*", "var", "while"
+  ":=", "begin", "call", ",", "const", "do", "end", "=", "[", ">", "ident",
+  "if", "[", "(", "<", "-", "#", "nil", "number", "odd", "period", "+",
+  "procedure", ")", ";", "/", "then", "*", "var", "while"
 };
 
 enum object {
@@ -101,6 +100,7 @@ static struct tnode table[TXMAX];
 
 static FILE *in;
 static FILE *out;
+static FILE *err;
 
 static enum symbol lex_sym;
 static int lex_num;
@@ -144,7 +144,7 @@ static void error(int n)
     case 30: msg = "This number is too large"; break;
     default: msg = "error";
   }
-  fprintf(stderr, "%s.\n", msg);
+  fprintf(err, "%s.\n", msg);
   exit(1);
 }
 
@@ -261,7 +261,7 @@ static int position(void)
 {
   for (int i = 0; i < tx; i++)
     if (strcmp(table[i].name, lex_str) == 0) return i;
-  error(1);
+  error(11);
   return -1;    // never reached.
 }
 
@@ -269,7 +269,7 @@ void constdeclaration(int lev)
 {
   if (lex_sym != ident) error(4);
   getsym();
-  if (lex_sym != becomes) error(1);
+  if (lex_sym == becomes) error(1);
   if (lex_sym != eql) error(3);
   getsym();
   if (lex_sym != number) error(2);
@@ -287,7 +287,7 @@ void vardeclaration(int lev)
 void listcode(int cx0)
 {
   for (int i = cx0; i < cx - 1; i++)
-    printf("%d%s%d%d\n", i, mnemonic[code[i].f], 1, code[i].a);
+    fprintf(out, "%d%s%d%d\n", i, mnemonic[code[i].f], 1, code[i].a);
 }
 
 static void expression(int lev);
@@ -455,8 +455,9 @@ void block(int lev)
   table[tx].adr = cx;
   gen(JMP, 0, 0);
   if (lev > LEVMAX) error(32);
-  do {
-  } while (lex_sym == constsym || lex_sym == varsym || lex_sym == procsym);
+  getsym();
+  if (lex_sym == constsym)
+    while (lex_sym != semicolon) constdeclaration(lev);
   table[tx0].adr = cx;    // start address of code
   cx0 = 0;
   gen(INT, 0, dx);
@@ -468,6 +469,7 @@ int main (int argc, char **argv)
 {
   in = stdin;
   out = stdout;
+  err = stderr;
   word[0] = symbol_name[beginsym];
   word[1] = symbol_name[callsym];
   word[2] = symbol_name[constsym];
@@ -490,15 +492,6 @@ int main (int argc, char **argv)
   wsym[8] = thensym;
   wsym[9] = varsym;
   wsym[10] = whilesym;
-  error(20);
-  getsym();
-  fprintf(out, "%d\n", lex_sym);
-  lex_str[0] = 'a';
-  lex_str[1] = 's';
-  lex_str[2] = 'd';
-  lex_str[3] = '\0';
-  enter(proc, 1);
-  enter(proc, 1);
-  printf("pos: %d\n", position());
+  block(0);
   return 0;
 }

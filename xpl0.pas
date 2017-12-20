@@ -17,20 +17,19 @@ const norw = 11;     {no. of reserved words}
       levmax = 3;    {maximum depth of block nesting}
       cxmax = 200;   {size of code array}
 
-type symbol =
-   (nul,ident,number,plus,minus,times,slash,oddsym,
-    eql,neq,lss,leq,gtr,geq,lparen,rparen,comma,semicolon,
-    period,becomes,beginsym,endsym,ifsym,thensym,
-    whilesym,dosym,callsym,constsym,varsym,procsym);
-    alfa = packed array [1..al] of char;
-    object = (constant,varible,proc);
-    symset = set of symbol;
-    fct = (lit,opr,lod,sto,cal,int,jmp,jpc);   {functions}
-    instruction = packed record
-                     f: fct;           {function code}
-                     l: 0..levmax;     {level}
-                     a: 0..amax        {displacement address}
-                  end;
+type symbol = (nul,ident,number,plus,minus,times,slash,oddsym,
+               eql,neq,lss,leq,gtr,geq,lparen,rparen,comma,semicolon,
+               period,becomes,beginsym,endsym,ifsym,thensym,
+               whilesym,dosym,callsym,constsym,varsym,procsym);
+     alfa = packed array [1..al] of char;
+     object = (constant,varible,proc);
+     symset = set of symbol;
+     fct = (lit,opr,lod,sto,cal,int,jmp,jpc);   {functions}
+     instruction = packed record
+                      f: fct;           {function code}
+                      l: 0..levmax;     {level}
+                      a: 0..amax        {displacement address}
+                   end;
 
 { lit 0,a  :  load constant a
   opr 0,a  :  execute operation a
@@ -504,9 +503,10 @@ procedure interpret;
        base := b1
    end {base};
 
-begin writeln(' start pl/0');
-   t := 0; b := 1; p := 0;
-   s[1] := 0; s[2] := 0; s[3] := 0;
+begin
+  writeln(' start pl/0');
+  t := 0; b := 1; p := 0;
+  s[1] := 0; s[2] := 0; s[3] := 0;
    repeat i := code[p]; p := p + 1;
       with i do
       case f of
