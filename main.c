@@ -26,23 +26,12 @@
 #include <string.h>
 #include <stdbool.h>
 
-// no.of reserved words
-#define NORW 11
-
-// length of identifier table
-#define TXMAX 100
-
-// max.no. of digits in numbers
-#define NMAX 14
-
-// length of identifiers
-#define IMAX 10
-
-// maximum address
-#define AMAX 2047
-
-// maximum depth of block nesting
-#define LEVMAX 3
+#define TABLE_SIZE 100
+#define RESERVED_WORDS 11
+#define MAX_DIGIT 14
+#define MAX_IDENTIFIER 10
+#define MAX_ADDRESS 2047
+#define MAX_LEVEL 3
 
 // size of code array
 #define CMAX 200
@@ -86,7 +75,7 @@ struct instruction {
   int a;
 };
 
-struct tnode {
+struct table_record {
   char *name;
   enum object kind;
   int val;
@@ -94,9 +83,9 @@ struct tnode {
   int adr;
 };
 
-static char *word[NORW];
-static enum symbol wsym[NORW];
-static struct tnode table[TXMAX];
+static char *word[RESERVED_WORDS];
+static enum symbol wsym[RESERVED_WORDS];
+static struct table_record table[TABLE_SIZE];
 
 static FILE *in;
 static FILE *out;
@@ -104,7 +93,9 @@ static FILE *err;
 
 static enum symbol lex_sym;
 static int lex_num;
-static char lex_str[IMAX];
+static char lex_str[MAX_IDENTIFIER];
+static int lex_line;
+static int lex_column;
 
 static char ch = 0x20;
 static int tx = 0;    // table contents
@@ -131,7 +122,7 @@ static void error(int n)
     case 11: msg = "Undeclared identifier"; break;
     case 12: msg = "Assignment to constant or procedure is not allowed"; break;
     case 13: msg = "':=' expected"; break;
-    case 14: msg = "call must be followed by an identifie"; break;
+    case 14: msg = "Call must be followed by an identifie"; break;
     case 15: msg = "Call of a constant or variable is meaningless"; break;
     case 16: msg = "'then' expecte"; break;
     case 17: msg = "';' or 'end' expecte"; break;
@@ -141,10 +132,15 @@ static void error(int n)
     case 21: msg = "Expression must not contain a procedure identifier"; break;
     case 22: msg = "Right parenthesis missing"; break;
     case 23: msg = "An expression cannot begin with this symbol"; break;
+    case 24: msg = "This Identifier is too large"; break;
+    case 25: msg = "eof reached"; break;
     case 30: msg = "This number is too large"; break;
     default: msg = "error";
   }
-  fprintf(err, "%s.\n", msg);
+  fprintf(err, "\nError: %s.\n", msg);
+  fprintf(err, "at line: %d, column: %d\n", lex_line, lex_column);
+  fprintf(err, "symbol: '%s', number: '%i', string: '%s'\n"
+      , symbol_name[lex_sym], lex_num, lex_str);
   exit(1);
 }
 
@@ -159,9 +155,12 @@ static void gen(enum fct f, int l, int a)
 
 void nextch(void)
 {
-  assert(!feof(in));
-  ch = fgetc(in);
-  fprintf(out, "%c", ch);
+  if (feof(in)) error(25);
+  if ((ch = fgetc(in)) != '\n') lex_column++;
+  else {
+    lex_line++;
+    lex_column = 0;
+  }
 }
 
 void dump_table(void)
@@ -185,12 +184,12 @@ void getsym(void)
   if (isalpha(ch)) {
     lex_sym = ident;
     for (int i = 0; isalnum(ch); i++) {
-      assert(i < IMAX);
+      if ((i + 1) >= MAX_IDENTIFIER) error(24);
       lex_str[i] = ch;
       lex_str[i + 1] = '\0';
       nextch();
     }
-    for (int i = 0; i < NORW; i++)
+    for (int i = 0; i < RESERVED_WORDS; i++)
       if (strcmp(lex_str, word[i]) == 0) {
         lex_sym = wsym[i];
         break;
@@ -227,19 +226,17 @@ void getsym(void)
         }
       default: lex_sym = nil;
     }
+    nextch();
   }
 }
 
-/*
- * enter symbol table
- */
 static void enter(enum object o, int lev)
 {
   table[tx].name = lex_str;
   table[tx].kind = o;
   switch (o) {
     case constant:
-      assert(lex_num < AMAX);
+      assert(lex_num < MAX_ADDRESS);
       table[tx].val = lex_num;
       break;
     case variable:
@@ -254,9 +251,6 @@ static void enter(enum object o, int lev)
   dump_table();
 }
 
-/*
- * find identifier id in table
- */
 static int position(void)
 {
   for (int i = 0; i < tx; i++)
@@ -265,8 +259,9 @@ static int position(void)
   return -1;    // never reached.
 }
 
-void constdeclaration(int lev)
+static void constdeclaration(int lev)
 {
+  getsym();
   if (lex_sym != ident) error(4);
   getsym();
   if (lex_sym == becomes) error(1);
@@ -287,7 +282,7 @@ void vardeclaration(int lev)
 void listcode(int cx0)
 {
   for (int i = cx0; i < cx - 1; i++)
-    fprintf(out, "%d%s%d%d\n", i, mnemonic[code[i].f], 1, code[i].a);
+    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic[code[i].f], 1, code[i].a);
 }
 
 static void expression(int lev);
@@ -309,7 +304,7 @@ void factor(int lev)
           break;
         }
       case number:
-        if (lex_num > AMAX) error(30);
+        if (lex_num > MAX_ADDRESS) error(30);
         gen(LIT, 0, lex_num);
         getsym();
         break;
@@ -447,22 +442,29 @@ void statement(int lev)
   }
 }
 
-void block(int lev)
+static void block(int lev)
 {
   int dx, tx0, cx0;
   dx = 3;
   tx0 = tx;
   table[tx].adr = cx;
   gen(JMP, 0, 0);
-  if (lev > LEVMAX) error(32);
+  if (lev > MAX_LEVEL) error(32);
   getsym();
   if (lex_sym == constsym)
     while (lex_sym != semicolon) constdeclaration(lev);
   table[tx0].adr = cx;    // start address of code
   cx0 = 0;
   gen(INT, 0, dx);
-  statement(lev);
+  // statement(lev);
   listcode(cx0);
+}
+
+static void lex_init(void)
+{
+  lex_line = lex_column = lex_num = 0;
+  lex_str[0] = '\0';
+  lex_sym = nil;
 }
 
 int main (int argc, char **argv)
@@ -470,6 +472,8 @@ int main (int argc, char **argv)
   in = stdin;
   out = stdout;
   err = stderr;
+  setbuf(out, NULL);
+  lex_init();
   word[0] = symbol_name[beginsym];
   word[1] = symbol_name[callsym];
   word[2] = symbol_name[constsym];
