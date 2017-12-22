@@ -259,21 +259,30 @@ static int position(void)
 
 static void constdeclaration(int lev)
 {
-  getsym();
-  if (lex_sym != ident) error(4);
-  getsym();
-  if (lex_sym == becomes) error(1);
-  if (lex_sym != eql) error(3);
-  getsym();
-  if (lex_sym != number) error(2);
-  enter(constant, lev);
+  while (lex_sym != semicolon) {
+    getsym();
+    if (lex_sym != ident) error(4);
+    getsym();
+    if (lex_sym == becomes) error(1);
+    if (lex_sym != eql) error(3);
+    getsym();
+    if (lex_sym != number) error(2);
+    enter(constant, lev);
+    getsym();
+    if (lex_sym != comma && lex_sym != semicolon) error(5);
+  }
   getsym();
 }
 
-void vardeclaration(int lev)
+static void vardeclaration(int lev)
 {
-  if (lex_sym != ident) error(4);
-  enter(variable, lev);
+  while (lex_sym != semicolon) {
+    getsym();
+    if (lex_sym != ident) error(4);
+    enter(variable, lev);
+    getsym();
+    if (lex_sym != comma && lex_sym != semicolon) error(5);
+  }
   getsym();
 }
 
@@ -448,8 +457,18 @@ static void block(int lev)
   gen(JMP, 0, 0);
   if (lev > MAX_LEVEL) error(32);
   getsym();
-  if (lex_sym == constsym)
-    while (lex_sym != semicolon) constdeclaration(lev);
+  if (lex_sym == constsym) constdeclaration(lev);
+  if (lex_sym == varsym) vardeclaration(lev);
+  if (lex_sym == procsym) {
+    getsym();
+    if (lex_sym != ident) error(4);
+    enter(proc, lev);
+    getsym();
+    if (lex_sym != semicolon) error(5);
+    block(lev + 1);
+    getsym();
+    if (lex_sym != semicolon) error(5);
+  }
   table[tx0].adr = cx;    // start address of code
   cx0 = 0;
   gen(INT, 0, dx);
