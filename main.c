@@ -28,7 +28,6 @@
 
 #define TABLE_SIZE 100
 #define RESERVED_WORDS 11
-#define MAX_DIGIT 14
 #define MAX_IDENTIFIER 10
 #define MAX_ADDRESS 2047
 #define MAX_LEVEL 3
@@ -48,11 +47,8 @@ char *symbol_name[] = {
   "procedure", ")", ";", "/", "then", "*", "var", "while"
 };
 
-enum object {
-  constant,
-  variable,
-  proc
-};
+enum object { constant, variable, proc };
+char *object_name[] = { "constant", "variable", "proc" };
 
 enum fct {
   LIT,    // [LIT, 0, a] load constant a
@@ -65,9 +61,7 @@ enum fct {
   JPC     // [JPC, 0, a] jump conditional to a
 };
 
-char *mnemonic[] = {
-  "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
-};
+char *mnemonic[] = { "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC" };
 
 struct instruction {
   enum fct f;
@@ -76,7 +70,7 @@ struct instruction {
 };
 
 struct table_record {
-  char *name;
+  char name[MAX_IDENTIFIER];
   enum object kind;
   int val;
   int level;
@@ -169,12 +163,16 @@ void dump_table(void)
   for (int i = 0; i < tx; i++)
     fprintf(out, "\t[\
 name: %s\t\
-obect: %d\t\
+object: %s\t\
 level: %d\t\
 address: %d\t\
 value: %d\
-]\n\
-", table[i].name, table[i].kind, table[i].level, table[i].adr, table[i].val);
+]\n"
+    , table[i].name
+    , object_name[table[i].kind]
+    , table[i].level
+    , table[i].adr
+    , table[i].val);
   fprintf(out, "}\n");
 }
 
@@ -232,11 +230,11 @@ void getsym(void)
 
 static void enter(enum object o, int lev)
 {
-  table[tx].name = lex_str;
+  strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
   switch (o) {
     case constant:
-      assert(lex_num < MAX_ADDRESS);
+      if(lex_num > MAX_ADDRESS) error(30);
       table[tx].val = lex_num;
       break;
     case variable:
@@ -304,7 +302,6 @@ void factor(int lev)
           break;
         }
       case number:
-        if (lex_num > MAX_ADDRESS) error(30);
         gen(LIT, 0, lex_num);
         getsym();
         break;
