@@ -300,8 +300,7 @@ void factor(int lev)
     switch (lex_sym) {
       case ident:
         {
-          int pos;
-          if ((pos = position()) == 0) error(11);
+          int pos = position();
           switch (table[pos].kind) {
             case constant: gen(LIT, 0, table[pos].val);
             case variable: gen(LOD, lev - table[pos].level, table[pos].adr);
@@ -339,6 +338,7 @@ void term(int lev)
 
 static void expression(int lev)
 {
+    printf("%d\n", lev);
   enum symbol addop;
   if (lex_sym != plus && lex_sym != minus) term(lev);
   else {
@@ -391,11 +391,10 @@ void statement(int lev)
   switch (lex_sym) {
     case ident:
       pos = position();
-      if (pos == 0) error(11);
-      else if (table[pos].kind != variable) error(12);
+      if (table[pos].kind != variable) error(12);
       getsym();
-      if (lex_sym == becomes) getsym();
-      else error(13);
+      if (lex_sym != becomes) error(13);
+      getsym();
       expression(lev);
       gen(STO, lev - table[pos].level, table[pos].adr);
       break;
@@ -403,7 +402,6 @@ void statement(int lev)
       getsym();
       if (lex_sym != ident) error(14);
       pos = position();
-      if (pos == 0) error(11);
       if (table[pos].kind != proc) error(15);
       gen(CAL, lev - table[pos].level, table[pos].adr);
       getsym();
@@ -418,7 +416,6 @@ void statement(int lev)
       code[cx1].a = cx;
       break;
     case beginsym:
-      getsym();
       statement(lev);
       while (lex_sym == semicolon
           || lex_sym == beginsym
@@ -432,6 +429,7 @@ void statement(int lev)
       }
       if (lex_sym != endsym) error(17);
       getsym();
+      break;
     case whilesym:
       cx1 = cx;
       getsym();
@@ -444,7 +442,7 @@ void statement(int lev)
       gen(JMP, 0, cx1);
       code[cx2].a = cx;
       break;
-    default: error(99);
+    default: error(7);
   }
 }
 
@@ -468,11 +466,13 @@ static void block(int lev)
     block(lev + 1);
     getsym();
     if (lex_sym != semicolon) error(5);
+    getsym();
   }
   table[tx0].adr = cx;    // start address of code
   cx0 = 0;
   gen(INT, 0, dx);
-  // statement(lev);
+  statement(lev);
+  gen(OPR, 0, 0);    // return
   listcode(cx0);
 }
 
@@ -513,5 +513,6 @@ int main (int argc, char **argv)
   wsym[9] = varsym;
   wsym[10] = whilesym;
   block(0);
+  if (lex_sym != period) error(9);
   return 0;
 }
