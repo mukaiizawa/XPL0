@@ -416,19 +416,15 @@ void statement(int lev)
       code[cx1].a = cx;
       break;
     case beginsym:
-      statement(lev);
-      while (lex_sym == semicolon
-          || lex_sym == beginsym
-          || lex_sym == callsym
-          || lex_sym == ifsym
-          || lex_sym == whilesym)
-      {
-        if (lex_sym != semicolon) error(10);
+      while (lex_sym != endsym) {
         getsym();
+        if (lex_sym != ident && lex_sym != callsym && lex_sym != beginsym
+                && lex_sym != ifsym && lex_sym != whilesym)
+            error(7);
         statement(lev);
+        getsym();
+        if (lex_sym != semicolon) error(10);
       }
-      if (lex_sym != endsym) error(17);
-      getsym();
       break;
     case whilesym:
       cx1 = cx;
