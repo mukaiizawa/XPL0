@@ -27,24 +27,20 @@
 #include <stdbool.h>
 
 #define TABLE_SIZE 100
-#define RESERVED_WORDS 11
 #define MAX_IDENTIFIER 10
-#define MAX_ADDRESS 2047
-#define MAX_LEVEL 3
-
-// size of code array
+#define MAX_ADDRESS 2048
+#define MAX_LEVEL 4
 #define CMAX 200
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
-  ident, ifsym, leq, lparen, lss, minus, neq, nil, number, oddsym, period, plus,
-  procsym, rparen, semicolon, slash, thensym, times, varsym, whilesym
+  ident, ifsym, leq, lparen, lss, minus, neq, number, oddsym, period, plus,
+  procsym, rparen, semicolon, slash, thensym, times, varsym, whilesym, nil
 };
-
 char *symbol_name[] = {
   ":=", "begin", "call", ",", "const", "do", "end", "=", "[", ">", "ident",
-  "if", "[", "(", "<", "-", "#", "nil", "number", "odd", "period", "+",
-  "procedure", ")", ";", "/", "then", "*", "var", "while"
+  "if", "[", "(", "<", "-", "#", "number", "odd", "period", "+",
+  "procedure", ")", ";", "/", "then", "*", "var", "while", "nil"
 };
 
 enum object { constant, variable, proc };
@@ -60,14 +56,14 @@ enum fct {
   JMP,    // [JMP, 0, a] jump to a
   JPC     // [JPC, 0, a] jump conditional to a
 };
-
 char *nemonic[] = { "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC" };
 
-struct instruction {
+struct inst {
   enum fct f;
   int l;
   int a;
 };
+static struct inst code[CMAX];
 
 struct table_record {
   char name[MAX_IDENTIFIER];
@@ -76,31 +72,27 @@ struct table_record {
   int level;
   int adr;
 };
-
-static char *word[RESERVED_WORDS];
-static enum symbol wsym[RESERVED_WORDS];
 static struct table_record table[TABLE_SIZE];
 
 static FILE *in;
 static FILE *out;
 static FILE *err;
 
+static int lex_ch;
+static int lex_line;
+static int lex_column;
 static enum symbol lex_sym;
 static int lex_num;
 static char lex_str[MAX_IDENTIFIER];
-static int lex_line;
-static int lex_column;
 
-static char ch = 0x20;
-static int tx = 0;    // table contents
-static int dx = 0;
+static int tx = 0;    // table index
+static int dx = 0;    // data allocation index
 static int cx = 0;    // code allocation index
-static struct instruction code[CMAX];
 
 static void listcode(int cx0)
 {
   for (int i = cx0; i < cx - 1; i++)
-    fprintf(out, "%4d: %s%2d,%2d\n", i, nemonic[code[i].f], code[i].l
+    fprintf(out, "%4d: %s %d,%d\n", i, nemonic[code[i].f], code[i].l
         , code[i].a);
 }
 
@@ -179,7 +171,7 @@ static void gen(enum fct f, int l, int a)
 void nextch(void)
 {
   if (feof(in)) error(25);
-  if ((ch = fgetc(in)) != '\n') lex_column++;
+  if ((lex_ch = fgetc(in)) != '\n') lex_column++;
   else {
     lex_line++;
     lex_column = 0;
@@ -188,29 +180,29 @@ void nextch(void)
 
 enum symbol getsym(void)
 {
-  while (isspace(ch)) nextch();
-  if (isalpha(ch)) {
+  while (isspace(lex_ch)) nextch();
+  if (isalpha(lex_ch)) {
     lex_sym = ident;
-    for (int i = 0; isalnum(ch); i++) {
+    for (int i = 0; isalnum(lex_ch); i++) {
       if ((i + 1) >= MAX_IDENTIFIER) error(24);
-      lex_str[i] = ch;
+      lex_str[i] = lex_ch;
       lex_str[i + 1] = '\0';
       nextch();
     }
-    for (int i = 0; i < RESERVED_WORDS; i++)
-      if (strcmp(lex_str, word[i]) == 0) {
-        lex_sym = wsym[i];
+    for (int i = 0; i != nil ; i++)
+      if (strcmp(lex_str, symbol_name[i]) == 0) {
+        lex_sym = i;
         break;
       }
-  } else if (isdigit(ch)) {
+  } else if (isdigit(lex_ch)) {
     lex_num = 0;
     lex_sym = number;
-    while (isdigit(ch)) {
-      lex_num = 10 * lex_num + (ch - '0');
+    while (isdigit(lex_ch)) {
+      lex_num = 10 * lex_num + (lex_ch - '0');
       nextch();
     }
   } else {
-    switch (ch) {
+    switch (lex_ch) {
       case '+': lex_sym = plus; break;
       case '-': lex_sym = minus; break;
       case '*': lex_sym = times; break;
@@ -228,7 +220,7 @@ enum symbol getsym(void)
       case ';': lex_sym = semicolon; break;
       case ':':
         nextch();
-        if (ch == '=') {
+        if (lex_ch == '=') {
           lex_sym = becomes; break;
         }
       default: lex_sym = nil; break;
@@ -436,7 +428,7 @@ static void statement(int lev)
 
 static void block(int lev)
 {
-  int dx, tx0, cx0;
+  int tx0, cx0;
   dx = 3;
   tx0 = tx;
   table[tx].adr = cx;
@@ -444,7 +436,7 @@ static void block(int lev)
   if (lev > MAX_LEVEL) error(32);
   if (getsym() == constsym) constdeclaration(lev);
   if (lex_sym == varsym) vardeclaration(lev);
-  if (lex_sym == procsym) {
+  while (lex_sym == procsym) {
     if (getsym() != ident) error(4);
     enter(proc, lev);
     if (getsym() != semicolon) error(5);
@@ -462,6 +454,7 @@ static void block(int lev)
 
 static void lex_init(void)
 {
+  lex_ch = 0x20;
   lex_line = lex_column = lex_num = 0;
   lex_str[0] = '\0';
   lex_sym = nil;
@@ -469,33 +462,9 @@ static void lex_init(void)
 
 int main (int argc, char **argv)
 {
-  in = stdin;
-  out = stdout;
-  err = stderr;
+  in = stdin; out = stdout; err = stderr;
   setbuf(out, NULL);
   lex_init();
-  word[0] = symbol_name[beginsym];
-  word[1] = symbol_name[callsym];
-  word[2] = symbol_name[constsym];
-  word[3] = symbol_name[dosym];
-  word[4] = symbol_name[endsym];
-  word[5] = symbol_name[ifsym];
-  word[6] = symbol_name[oddsym];
-  word[7] = symbol_name[procsym];
-  word[8] = symbol_name[thensym];
-  word[9] = symbol_name[varsym];
-  word[10] = symbol_name[whilesym];
-  wsym[0] = beginsym;
-  wsym[1] = callsym;
-  wsym[2] = constsym;
-  wsym[3] = dosym;
-  wsym[4] = endsym;
-  wsym[5] = ifsym;
-  wsym[6] = oddsym;
-  wsym[7] = procsym;
-  wsym[8] = thensym;
-  wsym[9] = varsym;
-  wsym[10] = whilesym;
   tx = 0, cx = 0;
   block(0);
   if (lex_sym != period) error(9);
