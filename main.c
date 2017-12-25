@@ -122,7 +122,8 @@ static void error(int n)
     case 1: msg = "Use '=' instead of ':='"; break;
     case 2: msg = "'=' must be followed by a number"; break;
     case 3: msg = "Identifier must be followed by '='"; break;
-    case 5: msg = "';' or ',' missing"; break;
+    case 4: msg = "';' missing"; break;
+    case 5: msg = "',' or ';' missing"; break;
     case 6: msg = "Incorrect symbol after procedure declaration"; break;
     case 7: msg = "Statement expecte"; break;
     case 8: msg = "Incorrect symbol after statement part in block"; break;
@@ -370,8 +371,7 @@ static void condition(int lev)
 
 static void statement(int lev)
 {
-  int cx1, cx2;
-  int pos = 0;
+  int cx1, cx2, pos;
   switch (lex_sym) {
     case ident:
       pos = position();
@@ -436,9 +436,9 @@ static void block(int lev)
   while (lex_sym == procsym) {
     if (getsym() != ident) error(29);
     enter(proc, lev);
-    if (getsym() != semicolon) error(5);
+    if (getsym() != semicolon) error(4);
     block(lev + 1);
-    if (lex_sym != semicolon) error(5);
+    if (lex_sym != semicolon) error(4);
     getsym();
   }
   table[tx0].adr = cx;    // start address of code
