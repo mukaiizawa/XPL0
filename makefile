@@ -12,7 +12,6 @@ ifeq ($(os), windows)
 	exe=.exe
 endif
 
-cc=clang
 uflags=-Wall -Werror
 cflags=$(uflags) -c
 lflags=$(uflags)
