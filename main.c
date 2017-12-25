@@ -28,8 +28,7 @@
 
 #define TABLE_SIZE 100
 #define MAX_IDENTIFIER 10
-#define MAX_ADDRESS 2048
-#define CMAX 200
+#define MAX_CODE_SIZE 200
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
@@ -62,7 +61,7 @@ struct inst {
   int l;
   int a;
 };
-static struct inst code[CMAX];
+static struct inst code[MAX_CODE_SIZE];
 
 struct table_record {
   char name[MAX_IDENTIFIER];
@@ -124,10 +123,7 @@ static void error(int n)
     case 3: msg = "Identifier must be followed by '='"; break;
     case 4: msg = "';' missing"; break;
     case 5: msg = "',' or ';' missing"; break;
-    case 6: msg = "Incorrect symbol after procedure declaration"; break;
-    case 7: msg = "Statement expecte"; break;
-    case 8: msg = "Incorrect symbol after statement part in block"; break;
-    case 9: msg = "'.' expected"; break;
+    case 6: msg = "'.' expected"; break;
     case 10: msg = "';' between statements missing"; break;
     case 11: msg = "Undeclared identifier"; break;
     case 12: msg = "Assignment to constant or procedure is not allowed"; break;
@@ -140,14 +136,12 @@ static void error(int n)
     case 20: msg = "Relational operator expected"; break;
     case 21: msg = "Expression must not contain a procedure identifier"; break;
     case 22: msg = "')' missing"; break;
-    case 23: msg = "An expression cannot begin with this symbol"; break;
     case 24: msg = "This Identifier is too large"; break;
-    case 25: msg = "eof reached"; break;
+    case 25: msg = "EOF reached"; break;
     case 26: msg = "Factor expected"; break;
     case 27: msg = "'const' must be followed by identifier"; break;
     case 28: msg = "'var' must be followed by identifier"; break;
     case 29: msg = "'procedure' must be followed by identifier"; break;
-    case 30: msg = "This number is too large"; break;
     default: msg = "error";
   }
   fprintf(err, "\nError: %s.\n", msg);
@@ -160,7 +154,7 @@ static void error(int n)
 
 static void gen(enum fct f, int l, int a)
 {
-  if (cx > CMAX) error(99);
+  if (cx > MAX_CODE_SIZE) error(99);
   code[cx].f = f;
   code[cx].l = l;
   code[cx].a = a;
@@ -218,10 +212,10 @@ enum symbol getsym(void)
       case ']': lex_sym = geq; break;
       case ';': lex_sym = semicolon; break;
       case ':':
-        nextch();
-        if (lex_ch == '=') {
-          lex_sym = becomes; break;
-        }
+                nextch();
+                if (lex_ch == '=') {
+                  lex_sym = becomes; break;
+                }
       default: lex_sym = nil; break;
     }
     nextch();
@@ -235,7 +229,6 @@ static void enter(enum object o, int lev)
   table[tx].kind = o;
   switch (o) {
     case constant:
-      if(lex_num > MAX_ADDRESS) error(30);
       table[tx].val = lex_num;
       break;
     case variable:
@@ -405,6 +398,7 @@ static void statement(int lev)
         if (lex_sym != semicolon) error(10);
         getsym();
         statement(lev);
+        if (lex_sym != semicolon && lex_sym != endsym) error(17);
       }
       getsym();
       break;
@@ -449,6 +443,32 @@ static void block(int lev)
   listcode(cx0);
 }
 
+// static int base(int s[], int l, int b)
+// {
+//   int b1 = b;
+//   while (l-- > 0) b1 = s[b1];
+//   return b1;
+// }
+
+// static void interpret()
+// {
+//   int stacksize = 500;
+//   int p, b, t;    // program, base, topstack-registers
+//   t = 0;
+//   b = 1;
+//   p = 0;
+//   struct inst i;    // instruction register
+//   int s[stacksize];
+//   fprintf(out, "start xpl0");
+//   for (int s = code[p]; p++) {
+//     switch (inst.f) {
+//       case LIT:
+//         t++;
+//         break;
+//     }
+//   }
+// }
+
 static void lex_init(void)
 {
   lex_ch = 0x20;
@@ -464,6 +484,7 @@ int main (int argc, char **argv)
   lex_init();
   tx = 0, cx = 0;
   block(0);
-  if (lex_sym != period) error(9);
+  if (lex_sym != period) error(6);
+  // interpret();
   return 0;
 }
