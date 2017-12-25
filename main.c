@@ -29,7 +29,6 @@
 #define TABLE_SIZE 100
 #define MAX_IDENTIFIER 10
 #define MAX_ADDRESS 2048
-#define MAX_LEVEL 4
 #define CMAX 200
 
 enum symbol {
@@ -123,8 +122,6 @@ static void error(int n)
     case 1: msg = "Use '=' instead of ':='"; break;
     case 2: msg = "'=' must be followed by a number"; break;
     case 3: msg = "Identifier must be followed by '='"; break;
-    case 4: msg = "'const', 'var', 'procedure' must be followed by identifier";
-            break;
     case 5: msg = "';' or ',' missing"; break;
     case 6: msg = "Incorrect symbol after procedure declaration"; break;
     case 7: msg = "Statement expecte"; break;
@@ -139,15 +136,16 @@ static void error(int n)
     case 16: msg = "'then' expecte"; break;
     case 17: msg = "';' or 'end' expecte"; break;
     case 18: msg = "'do' expecte"; break;
-    case 19: msg = "Incorrect symbol following statement"; break;
     case 20: msg = "Relational operator expected"; break;
     case 21: msg = "Expression must not contain a procedure identifier"; break;
-    case 22: msg = "Right parenthesis missing"; break;
+    case 22: msg = "')' missing"; break;
     case 23: msg = "An expression cannot begin with this symbol"; break;
     case 24: msg = "This Identifier is too large"; break;
     case 25: msg = "eof reached"; break;
-    case 26: msg = "Factor expected";
-             break;
+    case 26: msg = "Factor expected"; break;
+    case 27: msg = "'const' must be followed by identifier"; break;
+    case 28: msg = "'var' must be followed by identifier"; break;
+    case 29: msg = "'procedure' must be followed by identifier"; break;
     case 30: msg = "This number is too large"; break;
     default: msg = "error";
   }
@@ -261,7 +259,7 @@ static int position(void)
 static void constdeclaration(int lev)
 {
   while (lex_sym != semicolon) {
-    if (getsym() != ident) error(4);
+    if (getsym() != ident) error(27);
     if (getsym() == becomes) error(1);
     else if (lex_sym != eql) error(3);
     if (getsym() != number) error(2);
@@ -274,7 +272,7 @@ static void constdeclaration(int lev)
 static void vardeclaration(int lev)
 {
   while (lex_sym != semicolon) {
-    if (getsym() != ident) error(4);
+    if (getsym() != ident) error(28);
     enter(variable, lev);
     if (getsym() != comma && lex_sym != semicolon) error(5);
   }
@@ -433,11 +431,10 @@ static void block(int lev)
   tx0 = tx;
   table[tx].adr = cx;
   gen(JMP, 0, 0);
-  if (lev > MAX_LEVEL) error(32);
   if (getsym() == constsym) constdeclaration(lev);
   if (lex_sym == varsym) vardeclaration(lev);
   while (lex_sym == procsym) {
-    if (getsym() != ident) error(4);
+    if (getsym() != ident) error(29);
     enter(proc, lev);
     if (getsym() != semicolon) error(5);
     block(lev + 1);
