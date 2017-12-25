@@ -91,7 +91,7 @@ static int cx = 0;    // code allocation index
 
 static void listcode(int cx0)
 {
-  for (int i = cx0; i < cx - 1; i++)
+  for (int i = cx0; i < cx; i++)
     fprintf(out, "%4d: %s %d,%d\n", i, nemonic[code[i].f], code[i].l
         , code[i].a);
 }
