@@ -26,9 +26,9 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define TABLE_SIZE 100
 #define MAX_IDENTIFIER 10
-#define MAX_CODE_SIZE 200
+#define MAX_TX 100
+#define MAX_CX 200
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
@@ -41,10 +41,10 @@ char *symbol_name[] = {
   "procedure", ")", ";", "/", "then", "*", "var", "while", "nil"
 };
 
-enum object { constant, variable, proc };
-char *object_name[] = { "constant", "variable", "proc" };
+enum object_type { constant, variable, proc };
+char *object_type_name[] = { "constant", "variable", "proc" };
 
-enum fct {
+enum mnemonic {
   LIT,    // [LIT, 0, a] load constant a
   OPR,    // [OPR, 0, a] execute operation a
   LOD,    // [LOD, l, a] load variable l, a
@@ -54,108 +54,92 @@ enum fct {
   JMP,    // [JMP, 0, a] jump to a
   JPC     // [JPC, 0, a] jump conditional to a
 };
-char *nemonic[] = { "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC" };
+char *mnemonic_name[] = {
+  "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
+};
 
 struct inst {
-  enum fct f;
+  enum mnemonic m;
   int l;
   int a;
 };
-static struct inst code[MAX_CODE_SIZE];
+static struct inst code[MAX_CX];
 
-struct table_record {
+struct object {
   char name[MAX_IDENTIFIER];
-  enum object kind;
+  enum object_type kind;
   int val;
   int level;
   int adr;
 };
-static struct table_record table[TABLE_SIZE];
+static struct object table[MAX_TX];
 
-static FILE *in;
-static FILE *out;
-static FILE *err;
+static FILE *in, *out, *err;
 
-static int lex_ch;
-static int lex_line;
-static int lex_column;
+static int lex_ch, lex_line, lex_column;
 static enum symbol lex_sym;
 static int lex_num;
 static char lex_str[MAX_IDENTIFIER];
 
-static int tx = 0;    // table index
-static int dx = 0;    // data allocation index
-static int cx = 0;    // code allocation index
-
-static void listcode(int cx0)
-{
-  for (int i = cx0; i < cx; i++)
-    fprintf(out, "%4d: %s %d,%d\n", i, nemonic[code[i].f], code[i].l
-        , code[i].a);
-}
+static int tx, dx, cx;    // index of table, data allocation, code allocation
 
 static void dump(void)
 {
-  listcode(0);
-  fprintf(out, "table {\n");
+  for (int i = 0; i < cx; i++)
+    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l
+        , code[i].a);
+#ifndef NDEBUG 
+  fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++)
-    fprintf(out, "\t[\
-name: %s\t\
-object: %s\t\
-level: %d\t\
-address: %d\t\
-value: %d\
-]\n"
-    , table[i].name
-    , object_name[table[i].kind]
-    , table[i].level
-    , table[i].adr
-    , table[i].val);
-  fprintf(out, "}\n");
+    fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
+        , object_type_name[table[i].kind], table[i].level , table[i].adr
+        , table[i].val);
+  fprintf(out, "symbol: '%s', number: '%i', string: '%s'\n"
+      , symbol_name[lex_sym], lex_num, lex_str);
+#endif
 }
 
 static void error(int n)
 {
   char* msg = NULL;
   switch (n) {
-    case 1: msg = "Use '=' instead of ':='"; break;
+    case 1: msg = "use '=' instead of ':='"; break;
     case 2: msg = "'=' must be followed by a number"; break;
-    case 3: msg = "Identifier must be followed by '='"; break;
+    case 3: msg = "identifier must be followed by '='"; break;
     case 4: msg = "';' missing"; break;
     case 5: msg = "',' or ';' missing"; break;
     case 6: msg = "'.' expected"; break;
     case 10: msg = "';' between statements missing"; break;
-    case 11: msg = "Undeclared identifier"; break;
-    case 12: msg = "Assignment to constant or procedure is not allowed"; break;
+    case 11: msg = "undeclared identifier"; break;
+    case 12: msg = "assignment to constant or procedure is not allowed"; break;
     case 13: msg = "':=' expected"; break;
-    case 14: msg = "Call must be followed by an identifie"; break;
-    case 15: msg = "Call of a constant or variable is meaningless"; break;
+    case 14: msg = "call must be followed by an identifie"; break;
+    case 15: msg = "call of a constant or variable is meaningless"; break;
     case 16: msg = "'then' expecte"; break;
     case 17: msg = "';' or 'end' expecte"; break;
     case 18: msg = "'do' expecte"; break;
-    case 20: msg = "Relational operator expected"; break;
-    case 21: msg = "Expression must not contain a procedure identifier"; break;
+    case 20: msg = "relational operator expected"; break;
+    case 21: msg = "expression must not contain a procedure identifier"; break;
     case 22: msg = "')' missing"; break;
-    case 24: msg = "This Identifier is too large"; break;
-    case 25: msg = "EOF reached"; break;
-    case 26: msg = "Factor expected"; break;
+    case 23: msg = "source code is too large"; break;
+    case 24: msg = "this identifier is too large"; break;
+    case 25: msg = "eof reached"; break;
+    case 26: msg = "factor expected"; break;
     case 27: msg = "'const' must be followed by identifier"; break;
     case 28: msg = "'var' must be followed by identifier"; break;
     case 29: msg = "'procedure' must be followed by identifier"; break;
     default: msg = "error";
   }
-  fprintf(err, "\nError: %s.\n", msg);
-  fprintf(err, "at line: %d, column: %d\n", lex_line, lex_column);
-  fprintf(err, "symbol: '%s', number: '%i', string: '%s'\n"
-      , symbol_name[lex_sym], lex_num, lex_str);
+  fprintf(err, "\nerror: %s.\n", msg);
+  fprintf(err, "at line %d, column %d\n", lex_line + 1, lex_column + 1);
   dump();
   exit(1);
 }
 
-static void gen(enum fct f, int l, int a)
+static void gen(enum mnemonic m, int l, int a)
 {
-  if (cx > MAX_CODE_SIZE) error(99);
-  code[cx].f = f;
+  if (cx > MAX_CX) error(23);
+  code[cx].m = m;
   code[cx].l = l;
   code[cx].a = a;
   cx++;
@@ -169,6 +153,9 @@ void nextch(void)
     lex_line++;
     lex_column = 0;
   }
+#ifndef NDEBUG
+  fprintf(out, "%c", lex_ch);
+#endif
 }
 
 enum symbol getsym(void)
@@ -223,8 +210,9 @@ enum symbol getsym(void)
   return lex_sym;
 }
 
-static void enter(enum object o, int lev)
+static void enter(enum object_type o, int lev)
 {
+  tx++;
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
   switch (o) {
@@ -239,43 +227,19 @@ static void enter(enum object o, int lev)
       table[tx].level = lev;
       break;
   }
-  tx++;
 }
 
 static int position(void)
 {
-  for (int i = 0; i < tx; i++)
+  for (int i = tx; i > 0; i--)
     if (strcmp(table[i].name, lex_str) == 0) return i;
   error(11);
-  return -1;    // never reached.
+  return 1;
 }
 
-static void constdeclaration(int lev)
-{
-  while (lex_sym != semicolon) {
-    if (getsym() != ident) error(27);
-    if (getsym() == becomes) error(1);
-    else if (lex_sym != eql) error(3);
-    if (getsym() != number) error(2);
-    enter(constant, lev);
-    if (getsym() != comma && lex_sym != semicolon) error(5);
-  }
-  getsym();
-}
+static void parse_expression(int lev);
 
-static void vardeclaration(int lev)
-{
-  while (lex_sym != semicolon) {
-    if (getsym() != ident) error(28);
-    enter(variable, lev);
-    if (getsym() != comma && lex_sym != semicolon) error(5);
-  }
-  getsym();
-}
-
-static void expression(int lev);
-
-static void factor(int lev)
+static void parse_factor(int lev)
 {
   switch (lex_sym) {
     case ident:
@@ -295,7 +259,7 @@ static void factor(int lev)
       break;
     case lparen:
       getsym();    // (
-      expression(lev);
+      parse_expression(lev);
       if (lex_sym != rparen) error(22);
       getsym();    // )
       break;
@@ -303,53 +267,53 @@ static void factor(int lev)
   }
 }
 
-static void term(int lev)
+static void parse_term(int lev)
 {
   enum symbol mulopp;
-  factor(lev);
+  parse_factor(lev);
   while (lex_sym == times || lex_sym == slash) {
     mulopp = lex_sym;
     getsym();
-    factor(lev);
+    parse_factor(lev);
     if (mulopp == times) gen(OPR, 0, 4);
     else gen(OPR, 0, 5);
   }
 }
 
-static void expression(int lev)
+static void parse_expression(int lev)
 {
   enum symbol addop;
   if (lex_sym == plus || lex_sym == minus) {
     addop = lex_sym;
     getsym();
-    term(lev);
+    parse_term(lev);
     if (addop == minus) gen(OPR, 0, 1);
-  } else  term(lev);
+  } else  parse_term(lev);
   while (lex_sym == plus || lex_sym == minus) {
     addop = lex_sym;
     getsym();
-    term(lev);
+    parse_term(lev);
     if (addop == plus) gen(OPR, 0, 2);
     else gen(OPR, 0, 3);
   }
 }
 
-static void condition(int lev)
+static void parse_condition(int lev)
 {
   enum symbol relop;
   if (lex_sym == oddsym) {
     getsym();
-    expression(lev);
+    parse_expression(lev);
     gen(OPR, 0, 6);
   } else {
-    expression(lev);
+    parse_expression(lev);
     relop = lex_sym;
     switch (relop) {
       case eql: case neq: case lss: case leq: case gtr: case geq: break;
       default: error(20);
     }
     getsym();
-    expression(lev);
+    parse_expression(lev);
     switch (relop) {
       case eql: gen(OPR, 0, 8); break;
       case neq: gen(OPR, 0, 9); break;
@@ -362,7 +326,7 @@ static void condition(int lev)
   }
 }
 
-static void statement(int lev)
+static void parse_statement(int lev)
 {
   int cx1, cx2, pos;
   switch (lex_sym) {
@@ -371,7 +335,7 @@ static void statement(int lev)
       if (table[pos].kind != variable) error(12);
       if (getsym() != becomes) error(13);
       getsym();
-      expression(lev);
+      parse_expression(lev);
       gen(STO, lev - table[pos].level, table[pos].adr);
       break;
     case callsym:
@@ -383,21 +347,21 @@ static void statement(int lev)
       break;
     case ifsym:
       getsym();
-      condition(lev);
+      parse_condition(lev);
       if (lex_sym != thensym) error(16);
       cx1 = cx;
       gen(JPC, 0, 0);
       getsym();
-      statement(lev);
+      parse_statement(lev);
       code[cx1].a = cx;
       break;
     case beginsym:
       getsym();
-      statement(lev);
+      parse_statement(lev);
       while (lex_sym != endsym) {
         if (lex_sym != semicolon) error(10);
         getsym();
-        statement(lev);
+        parse_statement(lev);
         if (lex_sym != semicolon && lex_sym != endsym) error(17);
       }
       getsym();
@@ -405,12 +369,12 @@ static void statement(int lev)
     case whilesym:
       cx1 = cx;
       getsym();
-      condition(lev);
+      parse_condition(lev);
       cx2 = cx;
       gen(JPC, 0, 0);
       if (lex_sym != dosym) error(18);
       getsym();
-      statement(lev);
+      parse_statement(lev);
       gen(JMP, 0, cx1);
       code[cx2].a = cx;
       break;
@@ -418,29 +382,51 @@ static void statement(int lev)
   }
 }
 
-static void block(int lev)
+static void parse_block(int lev)
 {
-  int tx0, cx0;
+  int tx0;
   dx = 3;
   tx0 = tx;
   table[tx].adr = cx;
   gen(JMP, 0, 0);
-  if (getsym() == constsym) constdeclaration(lev);
-  if (lex_sym == varsym) vardeclaration(lev);
+  if (getsym() == constsym) {
+    while (lex_sym != semicolon) {
+      if (getsym() != ident) error(27);
+      if (getsym() == becomes) error(1);
+      if (lex_sym != eql) error(3);
+      if (getsym() != number) error(2);
+      enter(constant, lev);
+      if (getsym() != comma && lex_sym != semicolon) error(5);
+    }
+    getsym();
+  }
+  if (lex_sym == varsym) {
+    while (lex_sym != semicolon) {
+      if (getsym() != ident) error(28);
+      enter(variable, lev);
+      if (getsym() != comma && lex_sym != semicolon) error(5);
+    }
+    getsym();
+  }
   while (lex_sym == procsym) {
     if (getsym() != ident) error(29);
     enter(proc, lev);
     if (getsym() != semicolon) error(4);
-    block(lev + 1);
+    parse_block(lev + 1);
     if (lex_sym != semicolon) error(4);
     getsym();
   }
-  table[tx0].adr = cx;    // start address of code
-  cx0 = 0;
+  code[table[tx0].adr].a = cx;    // start address of code
+  table[tx0].adr = cx;
   gen(INT, 0, dx);
-  statement(lev);
+  parse_statement(lev);
   gen(OPR, 0, 0);    // return
-  listcode(cx0);
+}
+
+static void parse_program(void)
+{
+  parse_block(0);
+  if (lex_sym != period) error(6);
 }
 
 // static int base(int s[], int l, int b)
@@ -450,24 +436,33 @@ static void block(int lev)
 //   return b1;
 // }
 
-// static void interpret()
-// {
-//   int stacksize = 500;
-//   int p, b, t;    // program, base, topstack-registers
-//   t = 0;
-//   b = 1;
-//   p = 0;
-//   struct inst i;    // instruction register
-//   int s[stacksize];
-//   fprintf(out, "start xpl0");
-//   for (int s = code[p]; p++) {
-//     switch (inst.f) {
-//       case LIT:
-//         t++;
-//         break;
-//     }
-//   }
-// }
+/*
+ * PL0計算機は二つの記憶部、命令レジスタ、三つの番地レジスタからなる。
+ * コードと呼ばれるプログラム記述部はコンパイラによってロードされる。
+ * データ記憶部Sはスタックとして構成されているすべての算術演算はスタックの先頭の二つの要素に作用し、
+ * それらを実行結果によって置き換える。
+ * 先頭の要素はスタックトップレジスタTにより指定される。
+ * 命令レジスタIは現在解釈中の命令を保持する。
+ * プログラム番地レジスタPは次の解釈されるべき命令を保持する。
+ */
+static void interpret(void)
+{
+  // int stacksize = 500;
+  // int p, b, t;    // program, base, topstack-registers
+  // t = 0;
+  // b = 1;
+  // p = 0;
+  // struct inst i;    // instruction register
+  // int s[stacksize];
+  // fprintf(out, "start xpl0");
+  // for (int s = code[p]; p++) {
+  //   switch (inst.m) {
+  //     case LIT:
+  //       t++;
+  //       break;
+  //   }
+  // }
+}
 
 static void lex_init(void)
 {
@@ -482,9 +477,9 @@ int main (int argc, char **argv)
   in = stdin; out = stdout; err = stderr;
   setbuf(out, NULL);
   lex_init();
-  tx = 0, cx = 0;
-  block(0);
-  if (lex_sym != period) error(6);
-  // interpret();
+  tx = dx = cx = 0;
+  parse_program();
+  dump();
+  interpret();
   return 0;
 }
