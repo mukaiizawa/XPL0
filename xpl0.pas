@@ -510,7 +510,9 @@ begin
   writeln(' start pl/0');
   t := 0; b := 1; p := 0;
   s[1] := 0; s[2] := 0; s[3] := 0;
-  repeat i := code[p]; p := p + 1;
+  repeat
+    i := code[p];
+    p := p + 1;
     with i do
     case f of
       lit:

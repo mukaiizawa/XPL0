@@ -28,7 +28,8 @@
 
 #define MAX_IDENTIFIER 10
 #define MAX_TX 100
-#define MAX_CX 200
+#define MAX_CX 2000
+#define STACK_SIZE 500
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
@@ -85,17 +86,19 @@ static int tx, dx, cx;    // index of table, data allocation, code allocation
 
 static void dump(void)
 {
-  for (int i = 0; i < cx; i++)
-    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l
-        , code[i].a);
 #ifndef NDEBUG 
-  fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
+  fprintf(out, "\nlex\n");
+  fprintf(out, "symbol: '%s', number: '%i', string: '%s'\n"
+      , symbol_name[lex_sym], lex_num, lex_str);
+  fprintf(out, "\nname\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++)
     fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
         , object_type_name[table[i].kind], table[i].level , table[i].adr
         , table[i].val);
-  fprintf(out, "symbol: '%s', number: '%i', string: '%s'\n"
-      , symbol_name[lex_sym], lex_num, lex_str);
+  fprintf(out, "\ninst\n");
+  for (int i = 0; i < cx; i++)
+    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l
+        , code[i].a);
 #endif
 }
 
@@ -128,6 +131,8 @@ static void error(int n)
     case 27: msg = "'const' must be followed by identifier"; break;
     case 28: msg = "'var' must be followed by identifier"; break;
     case 29: msg = "'procedure' must be followed by identifier"; break;
+    case 30: msg = "undefined operator"; break;
+    case 31: msg = "undefined mnemonic"; break;
     default: msg = "error";
   }
   fprintf(err, "\nerror: %s.\n", msg);
@@ -136,18 +141,12 @@ static void error(int n)
   exit(1);
 }
 
-static void gen(enum mnemonic m, int l, int a)
-{
-  if (cx > MAX_CX) error(23);
-  code[cx].m = m;
-  code[cx].l = l;
-  code[cx].a = a;
-  cx++;
-}
-
 void nextch(void)
 {
   if (feof(in)) error(25);
+#ifndef NDEBUG
+  if (lex_ch == '\n') fprintf(out, "%4d: ", lex_line + 1);
+#endif
   if ((lex_ch = fgetc(in)) != '\n') lex_column++;
   else {
     lex_line++;
@@ -199,10 +198,10 @@ enum symbol getsym(void)
       case ']': lex_sym = geq; break;
       case ';': lex_sym = semicolon; break;
       case ':':
-                nextch();
-                if (lex_ch == '=') {
-                  lex_sym = becomes; break;
-                }
+        nextch();
+        if (lex_ch == '=') {
+          lex_sym = becomes; break;
+        }
       default: lex_sym = nil; break;
     }
     nextch();
@@ -210,11 +209,20 @@ enum symbol getsym(void)
   return lex_sym;
 }
 
+static void gen(enum mnemonic m, int l, int a)
+{
+  if (cx > MAX_CX) error(23);
+  code[cx].m = m;
+  code[cx].l = l;
+  code[cx].a = a;
+  cx++;
+}
+
 static void enter(enum object_type o, int lev)
 {
-  tx++;
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
+  table[tx].val = table[tx].level = table[tx].adr = 0;
   switch (o) {
     case constant:
       table[tx].val = lex_num;
@@ -227,14 +235,15 @@ static void enter(enum object_type o, int lev)
       table[tx].level = lev;
       break;
   }
+  tx++;
 }
 
 static int position(void)
 {
-  for (int i = tx; i > 0; i--)
+  for (int i = tx; i >= 0; i--)
     if (strcmp(table[i].name, lex_str) == 0) return i;
   error(11);
-  return 1;
+  return 1;    // unreachable
 }
 
 static void parse_expression(int lev);
@@ -258,10 +267,10 @@ static void parse_factor(int lev)
       getsym();
       break;
     case lparen:
-      getsym();    // (
+      getsym();    // skip '('
       parse_expression(lev);
       if (lex_sym != rparen) error(22);
-      getsym();    // )
+      getsym();    // skip ')'
       break;
     default: error(26);
   }
@@ -334,7 +343,7 @@ static void parse_statement(int lev)
       pos = position();
       if (table[pos].kind != variable) error(12);
       if (getsym() != becomes) error(13);
-      getsym();
+      getsym();    // skip ':='
       parse_expression(lev);
       gen(STO, lev - table[pos].level, table[pos].adr);
       break;
@@ -346,34 +355,34 @@ static void parse_statement(int lev)
       getsym();
       break;
     case ifsym:
-      getsym();
+      getsym();    // skip 'if'
       parse_condition(lev);
       if (lex_sym != thensym) error(16);
       cx1 = cx;
       gen(JPC, 0, 0);
-      getsym();
+      getsym();    // skip 'then'
       parse_statement(lev);
       code[cx1].a = cx;
       break;
     case beginsym:
-      getsym();
+      getsym();    // skip 'begin'
       parse_statement(lev);
       while (lex_sym != endsym) {
         if (lex_sym != semicolon) error(10);
-        getsym();
+        getsym();    // skip ';'
         parse_statement(lev);
         if (lex_sym != semicolon && lex_sym != endsym) error(17);
       }
-      getsym();
+      getsym();    // skip 'end'
       break;
     case whilesym:
       cx1 = cx;
-      getsym();
+      getsym();    // skip 'while'
       parse_condition(lev);
       cx2 = cx;
       gen(JPC, 0, 0);
       if (lex_sym != dosym) error(18);
-      getsym();
+      getsym();    //  skip 'do'
       parse_statement(lev);
       gen(JMP, 0, cx1);
       code[cx2].a = cx;
@@ -384,9 +393,8 @@ static void parse_statement(int lev)
 
 static void parse_block(int lev)
 {
-  int tx0;
+  int tx0 = tx;
   dx = 3;
-  tx0 = tx;
   table[tx].adr = cx;
   gen(JMP, 0, 0);
   if (getsym() == constsym) {
@@ -398,7 +406,7 @@ static void parse_block(int lev)
       enter(constant, lev);
       if (getsym() != comma && lex_sym != semicolon) error(5);
     }
-    getsym();
+    getsym();    // skip ';'
   }
   if (lex_sym == varsym) {
     while (lex_sym != semicolon) {
@@ -406,7 +414,7 @@ static void parse_block(int lev)
       enter(variable, lev);
       if (getsym() != comma && lex_sym != semicolon) error(5);
     }
-    getsym();
+    getsym();    // skip ';'
   }
   while (lex_sym == procsym) {
     if (getsym() != ident) error(29);
@@ -429,12 +437,12 @@ static void parse_program(void)
   if (lex_sym != period) error(6);
 }
 
-// static int base(int s[], int l, int b)
-// {
-//   int b1 = b;
-//   while (l-- > 0) b1 = s[b1];
-//   return b1;
-// }
+static int base(int s[], int l, int b)
+{
+  int b1 = b;
+  while (l-- > 0) b1 = s[b1];
+  return b1;
+}
 
 /*
  * PL0計算機は二つの記憶部、命令レジスタ、三つの番地レジスタからなる。
@@ -447,26 +455,56 @@ static void parse_program(void)
  */
 static void interpret(void)
 {
-  // int stacksize = 500;
-  // int p, b, t;    // program, base, topstack-registers
-  // t = 0;
-  // b = 1;
-  // p = 0;
-  // struct inst i;    // instruction register
-  // int s[stacksize];
-  // fprintf(out, "start xpl0");
-  // for (int s = code[p]; p++) {
-  //   switch (inst.m) {
-  //     case LIT:
-  //       t++;
-  //       break;
-  //   }
-  // }
+  struct inst i;    // instruction register
+  int s[STACK_SIZE];    // stack
+  int p, b, t;    // program, base, topstack-registers
+  s[0] = s[1] = s[2] = 0;
+  t = 0, b = 1, p = 0;
+  fprintf(out, "\nstart xpl0\n");
+  do {
+    i = code[p++];
+    switch (i.m) {
+      case LIT: s[++t] = i.a; break;
+      case OPR:
+        switch (i.a) {
+          case 0: t = b - 1; p = s[t + 3]; b = s[t + 2]; break;
+          case 1: s[t] = -s[t]; break;
+          case 2: t--; s[t] = (s[t] + s[t + 1]); break;
+          case 3: t--; s[t] = (s[t] - s[t + 1]); break;
+          case 4: t--; s[t] = (s[t] * s[t + 1]); break;
+          case 5: t--; s[t] = (s[t] / s[t + 1]); break;
+          case 6: s[t] = (s[t] % 2 == 1); break;
+          case 8: t--; s[t] = (s[t] == s[t + 1]); break;
+          case 9: t--; s[t] = (s[t] != s[t + 1]); break;
+          case 10: t--; s[t] = (s[t] < s[t + 1]); break;
+          case 11: t--; s[t] = (s[t] >= s[t + 1]); break;
+          case 12: t--; s[t] = (s[t] > s[t + 1]); break;
+          case 13: t--; s[t] = (s[t] <= s[t + 1]); break;
+          default: error(30);
+        }
+      case LOD: s[++t] = s[base(s, i.l, b) + i.a]; break;
+      case STO:
+        s[base(s, i.l, b) + i.a] = s[t];
+        fprintf(out, "\t%d\n", s[t--]);
+        break;
+      case CAL:
+        s[t + 1] = base(s, i.l, b);
+        s[t + 2] = b;
+        s[t + 3] = p;
+        b = t + 1;
+        p = i.a;
+        break;
+      case INT: t += i.a; break;
+      case JMP: p = i.a; break;
+      case JPC: if(s[t]) p = i.a; else t--; break;
+      default: error(31);
+    }
+  } while (p != 0);
 }
 
 static void lex_init(void)
 {
-  lex_ch = 0x20;
+  lex_ch = 0xA;
   lex_line = lex_column = lex_num = 0;
   lex_str[0] = '\0';
   lex_sym = nil;

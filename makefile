@@ -7,10 +7,10 @@ cc?=clang
 debug?=on
 
 ifeq ($(filter $(supportos),$(os)),)
-	$(error Unsupport os.)
+$(error Unsupport os.)
 endif
 ifeq ($(os), windows)
-	exe=.exe
+exe=.exe
 endif
 
 uflags=-Wall -Werror
@@ -20,9 +20,9 @@ sflags=-s
 link=$(cc) $(lflags) -o $@$(exe) $+
 
 ifeq ($(debug),on)
-	uflags+=-g
+uflags+=-g
 else
-	cflags+=-O3 -DNDEBUG
+cflags+=-O3 -DNDEBUG
 endif
 
 .SUFFIXES: .c .o
@@ -34,6 +34,9 @@ all: xpl0
 
 xpl0: main.o
 	$(link)
+
+test: $(xpl0)
+	./$(xpl0) < test.xpl0
 
 clean:
 	rm -f *.o *.exe xpl0
