@@ -87,15 +87,16 @@ static int tx, dx, cx;    // index of table, data allocation, code allocation
 static void dump(void)
 {
 #ifndef NDEBUG 
-  fprintf(out, "\nlex\n");
+  fprintf(out, "\n*** lex ***\n");
   fprintf(out, "symbol: '%s', number: '%i', string: '%s'\n"
       , symbol_name[lex_sym], lex_num, lex_str);
+  fprintf(out, "\n*** table ***\n");
   fprintf(out, "\nname\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++)
     fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
         , object_type_name[table[i].kind], table[i].level , table[i].adr
         , table[i].val);
-  fprintf(out, "\ninst\n");
+  fprintf(out, "\n*** instruction ***\n");
   for (int i = 0; i < cx; i++)
     fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l
         , code[i].a);
@@ -133,6 +134,8 @@ static void error(int n)
     case 29: msg = "'procedure' must be followed by identifier"; break;
     case 30: msg = "undefined operator"; break;
     case 31: msg = "undefined mnemonic"; break;
+    case 32: msg = "object is too many"; break;
+    case 33: msg = "undefined object type"; break;
     default: msg = "error";
   }
   fprintf(err, "\nerror: %s.\n", msg);
@@ -145,6 +148,8 @@ void nextch(void)
 {
   if (feof(in)) error(25);
 #ifndef NDEBUG
+  if (lex_line == 0 && lex_ch == '\n')
+    fprintf(out, "\n*** source ***\n");
   if (lex_ch == '\n') fprintf(out, "%4d: ", lex_line + 1);
 #endif
   if ((lex_ch = fgetc(in)) != '\n') lex_column++;
@@ -220,6 +225,7 @@ static void gen(enum mnemonic m, int l, int a)
 
 static void enter(enum object_type o, int lev)
 {
+  if (tx > MAX_TX) error(32);
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
   table[tx].val = table[tx].level = table[tx].adr = 0;
@@ -256,8 +262,11 @@ static void parse_factor(int lev)
         int pos = position();
         switch (table[pos].kind) {
           case constant: gen(LIT, 0, table[pos].val); break;
-          case variable: gen(LOD, lev - table[pos].level, table[pos].adr); break;
+          case variable:
+            gen(LOD, lev - table[pos].level, table[pos].adr);
+            break;
           case proc: error(21); break;
+          default: error(33);
         }
         getsym();
         break;
@@ -460,7 +469,7 @@ static void interpret(void)
   int p, b, t;    // program, base, topstack-registers
   s[0] = s[1] = s[2] = 0;
   t = 0, b = 1, p = 0;
-  fprintf(out, "\nstart xpl0\n");
+  fprintf(out, "\n*** start xpl0 ***\n");
   do {
     i = code[p++];
     switch (i.m) {
