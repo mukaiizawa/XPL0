@@ -87,11 +87,8 @@ static int tx, dx, cx;    // index of table, data allocation, code allocation
 static void dump(void)
 {
 #ifndef NDEBUG 
-  fprintf(out, "\n*** lex ***\n");
-  fprintf(out, "symbol: '%s', number: '%i', string: '%s'\n"
-      , symbol_name[lex_sym], lex_num, lex_str);
   fprintf(out, "\n*** table ***\n");
-  fprintf(out, "\nname\tobject_type\tlevel\taddress\tvalue\n");
+  fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++)
     fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
         , object_type_name[table[i].kind], table[i].level , table[i].adr
@@ -136,6 +133,7 @@ static void error(int n)
     case 31: msg = "undefined mnemonic"; break;
     case 32: msg = "object is too many"; break;
     case 33: msg = "undefined object type"; break;
+    case 34: msg = "cannot find object"; break;
     default: msg = "error";
   }
   fprintf(err, "\nerror: %s.\n", msg);
@@ -244,12 +242,20 @@ static void enter(enum object_type o, int lev)
   tx++;
 }
 
-static int position(void)
+static struct object find_by_name(char *name)
 {
   for (int i = tx; i >= 0; i--)
-    if (strcmp(table[i].name, lex_str) == 0) return i;
+    if (strcmp(table[i].name, name) == 0) return table[i];
   error(11);
-  return 1;    // unreachable
+  return table[0];    // unreachable
+}
+
+static struct object find_by_adr(int adr)
+{
+  for (int i = 0; i < tx; i++)
+    if (table[i].adr == adr) return table[i];
+  error(34);
+  return table[0];    // unreachable
 }
 
 static void parse_expression(int lev);
@@ -259,11 +265,11 @@ static void parse_factor(int lev)
   switch (lex_sym) {
     case ident:
       {
-        int pos = position();
-        switch (table[pos].kind) {
-          case constant: gen(LIT, 0, table[pos].val); break;
+        struct object o = find_by_name(lex_str);
+        switch (o.kind) {
+          case constant: gen(LIT, 0, o.val); break;
           case variable:
-            gen(LOD, lev - table[pos].level, table[pos].adr);
+            gen(LOD, lev - o.level, o.adr);
             break;
           case proc: error(21); break;
           default: error(33);
@@ -346,21 +352,22 @@ static void parse_condition(int lev)
 
 static void parse_statement(int lev)
 {
-  int cx1, cx2, pos;
+  struct object o;
+  int cx1, cx2;
   switch (lex_sym) {
     case ident:
-      pos = position();
-      if (table[pos].kind != variable) error(12);
+      o = find_by_name(lex_str);
+      if (o.kind != variable) error(12);
       if (getsym() != becomes) error(13);
       getsym();    // skip ':='
       parse_expression(lev);
-      gen(STO, lev - table[pos].level, table[pos].adr);
+      gen(STO, lev - o.level, o.adr);
       break;
     case callsym:
       if (getsym() != ident) error(14);
-      pos = position();
-      if (table[pos].kind != proc) error(15);
-      gen(CAL, lev - table[pos].level, table[pos].adr);
+      o = find_by_name(lex_str);
+      if (o.kind != proc) error(15);
+      gen(CAL, lev - o.level, o.adr);
       getsym();
       break;
     case ifsym:
@@ -494,7 +501,8 @@ static void interpret(void)
       case LOD: s[++t] = s[base(s, i.l, b) + i.a]; break;
       case STO:
         s[base(s, i.l, b) + i.a] = s[t];
-        fprintf(out, "\t%d\n", s[t--]);
+        fprintf(out, "\tassign %d to %s\n", s[t], find_by_adr(i.a).name);
+        t--;
         break;
       case CAL:
         s[t + 1] = base(s, i.l, b);
