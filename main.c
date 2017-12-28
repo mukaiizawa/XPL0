@@ -460,15 +460,6 @@ static int base(int s[], int l, int b)
   return b1;
 }
 
-/*
- * PL0計算機は二つの記憶部、命令レジスタ、三つの番地レジスタからなる。
- * コードと呼ばれるプログラム記述部はコンパイラによってロードされる。
- * データ記憶部Sはスタックとして構成されているすべての算術演算はスタックの先頭の二つの要素に作用し、
- * それらを実行結果によって置き換える。
- * 先頭の要素はスタックトップレジスタTにより指定される。
- * 命令レジスタIは現在解釈中の命令を保持する。
- * プログラム番地レジスタPは次の解釈されるべき命令を保持する。
- */
 static void interpret(void)
 {
   struct inst i;    // instruction register
@@ -477,8 +468,10 @@ static void interpret(void)
   s[0] = s[1] = s[2] = 0;
   t = 0, b = 1, p = 0;
   fprintf(out, "\n*** start xpl0 ***\n");
+  fprintf(out, "\n*** p, b, t, stack ***\n");
   do {
     i = code[p++];
+    fprintf(out, "%d\t%d\t%d\t%d\t%d\t%d\n", p, b, t, s[0], s[1], s[2]);
     switch (i.m) {
       case LIT: s[++t] = i.a; break;
       case OPR:
