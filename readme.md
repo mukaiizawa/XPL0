@@ -1,4 +1,4 @@
-XPL0 -- extended pl/0 compiler
+XPL0 -- extended Wirth's pl/0 compiler.
 
 # usage
 Make executable file.
