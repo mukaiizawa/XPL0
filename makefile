@@ -32,7 +32,7 @@ endif
 xpl0=xpl0$(exe)
 all: xpl0
 
-xpl0: main.o
+xpl0: xpl0.o
 	$(link)
 
 test: $(xpl0)
