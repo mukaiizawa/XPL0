@@ -59,12 +59,12 @@ char *mnemonic_name[] = {
   "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
 };
 
-struct inst {
+struct instruction {
   enum mnemonic m;
   int l;
   int a;
 };
-static struct inst code[MAX_CX];
+static struct instruction code[MAX_CX];
 
 struct object {
   char name[MAX_IDENTIFIER];
@@ -462,18 +462,18 @@ static int base(int s[], int l, int b)
 
 static void interpret(void)
 {
-  struct inst i;    // instruction register
+  struct instruction inst;    // instruction register
   int s[STACK_SIZE];    // stack
   int p, b, t;    // program, base, topstack-registers
   s[0] = s[1] = s[2] = 0;
   p = t = 0, b = 1;
   fprintf(out, "\n*** start xpl0 ***\n");
   do {
-    i = code[p++];
-    switch (i.m) {
-      case LIT: s[++t] = i.a; break;
+    inst = code[p++];
+    switch (inst.m) {
+      case LIT: s[++t] = inst.a; break;
       case OPR:
-        switch (i.a) {
+        switch (inst.a) {
           case 0: t = b - 1; p = s[t + 3]; b = s[t + 2]; break;
           case 1: s[t] = -s[t]; break;
           case 2: t--; s[t] = (s[t] + s[t + 1]); break;
@@ -490,22 +490,22 @@ static void interpret(void)
           default: error(30);
         }
         break;
-      case LOD: s[++t] = s[base(s, i.l, b) + i.a]; break;
+      case LOD: s[++t] = s[base(s, inst.l, b) + inst.a]; break;
       case STO:
-        s[base(s, i.l, b) + i.a] = s[t];
-        fprintf(out, "assign %d to %s\n", s[t], find_by_adr(i.a).name);
+        s[base(s, inst.l, b) + inst.a] = s[t];
+        fprintf(out, "assign %d to %s\n", s[t], find_by_adr(inst.a).name);
         t--;
         break;
       case CAL:
-        s[t + 1] = base(s, i.l, b);
+        s[t + 1] = base(s, inst.l, b);
         s[t + 2] = b;
         s[t + 3] = p;
         b = t + 1;
-        p = i.a;
+        p = inst.a;
         break;
-      case INT: t += i.a; break;
-      case JMP: p = i.a; break;
-      case JPC: if(s[t]) p = i.a; else t--; break;
+      case INT: t += inst.a; break;
+      case JMP: p = inst.a; break;
+      case JPC: if(s[t]) p = inst.a; else t--; break;
       default: error(31);
     }
   } while (p != 0);
