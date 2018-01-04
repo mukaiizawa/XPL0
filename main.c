@@ -466,12 +466,10 @@ static void interpret(void)
   int s[STACK_SIZE];    // stack
   int p, b, t;    // program, base, topstack-registers
   s[0] = s[1] = s[2] = 0;
-  t = 0, b = 1, p = 0;
+  p = t = 0, b = 1;
   fprintf(out, "\n*** start xpl0 ***\n");
-  fprintf(out, "\n*** p, b, t, stack ***\n");
   do {
     i = code[p++];
-    fprintf(out, "%d\t%d\t%d\t%d\t%d\t%d\n", p, b, t, s[0], s[1], s[2]);
     switch (i.m) {
       case LIT: s[++t] = i.a; break;
       case OPR:
@@ -491,10 +489,11 @@ static void interpret(void)
           case 13: t--; s[t] = (s[t] <= s[t + 1]); break;
           default: error(30);
         }
+        break;
       case LOD: s[++t] = s[base(s, i.l, b) + i.a]; break;
       case STO:
         s[base(s, i.l, b) + i.a] = s[t];
-        fprintf(out, "\tassign %d to %s\n", s[t], find_by_adr(i.a).name);
+        fprintf(out, "assign %d to %s\n", s[t], find_by_adr(i.a).name);
         t--;
         break;
       case CAL:
