@@ -59,6 +59,10 @@ char *mnemonic_name[] = {
   "LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
 };
 
+enum operator {
+  RET, NEGATE, PLUS, MINUS, TIMES, DIV, ODD, EQ, NEQ, LESS, GEQ, GTR, LEQ
+};
+
 struct instruction {
   enum mnemonic m;
   int l;
@@ -299,8 +303,8 @@ static void parse_term(int lev)
     mulopp = lex_sym;
     getsym();
     parse_factor(lev);
-    if (mulopp == times) gen(OPR, 0, 4);
-    else gen(OPR, 0, 5);
+    if (mulopp == times) gen(OPR, 0, TIMES);
+    else gen(OPR, 0, DIV);
   }
 }
 
@@ -311,14 +315,14 @@ static void parse_expression(int lev)
     addop = lex_sym;
     getsym();
     parse_term(lev);
-    if (addop == minus) gen(OPR, 0, 1);
+    if (addop == minus) gen(OPR, 0, NEGATE);
   } else  parse_term(lev);
   while (lex_sym == plus || lex_sym == minus) {
     addop = lex_sym;
     getsym();
     parse_term(lev);
-    if (addop == plus) gen(OPR, 0, 2);
-    else gen(OPR, 0, 3);
+    if (addop == plus) gen(OPR, 0, PLUS);
+    else gen(OPR, 0, MINUS);
   }
 }
 
@@ -328,7 +332,7 @@ static void parse_condition(int lev)
   if (lex_sym == oddsym) {
     getsym();
     parse_expression(lev);
-    gen(OPR, 0, 6);
+    gen(OPR, 0, ODD);
   } else {
     parse_expression(lev);
     relop = lex_sym;
@@ -339,12 +343,12 @@ static void parse_condition(int lev)
     getsym();
     parse_expression(lev);
     switch (relop) {
-      case eql: gen(OPR, 0, 8); break;
-      case neq: gen(OPR, 0, 9); break;
-      case lss: gen(OPR, 0, 10); break;
-      case geq: gen(OPR, 0, 11); break;
-      case gtr: gen(OPR, 0, 12); break;
-      case leq: gen(OPR, 0, 13); break;
+      case eql: gen(OPR, 0, EQ); break;
+      case neq: gen(OPR, 0, NEQ); break;
+      case lss: gen(OPR, 0, LESS); break;
+      case geq: gen(OPR, 0, GEQ); break;
+      case gtr: gen(OPR, 0, GTR); break;
+      case leq: gen(OPR, 0, LEQ); break;
       default: break;    // unreachable
     }
   }
@@ -444,7 +448,7 @@ static void parse_block(int lev)
   table[tx0].adr = cx;
   gen(INT, 0, dx);
   parse_statement(lev);
-  gen(OPR, 0, 0);    // return
+  gen(OPR, 0, RET);    // return
 }
 
 static void parse_program(void)
@@ -462,7 +466,7 @@ static int base(int s[], int l, int b)
 
 static void interpret(void)
 {
-  struct instruction inst;    // instruction register
+  struct instruction inst;
   int s[STACK_SIZE];    // stack
   int p, b, t;    // program, base, topstack-registers
   s[0] = s[1] = s[2] = 0;
@@ -474,19 +478,19 @@ static void interpret(void)
       case LIT: s[++t] = inst.a; break;
       case OPR:
         switch (inst.a) {
-          case 0: t = b - 1; p = s[t + 3]; b = s[t + 2]; break;
-          case 1: s[t] = -s[t]; break;
-          case 2: t--; s[t] = (s[t] + s[t + 1]); break;
-          case 3: t--; s[t] = (s[t] - s[t + 1]); break;
-          case 4: t--; s[t] = (s[t] * s[t + 1]); break;
-          case 5: t--; s[t] = (s[t] / s[t + 1]); break;
-          case 6: s[t] = (s[t] % 2 == 1); break;
-          case 8: t--; s[t] = (s[t] == s[t + 1]); break;
-          case 9: t--; s[t] = (s[t] != s[t + 1]); break;
-          case 10: t--; s[t] = (s[t] < s[t + 1]); break;
-          case 11: t--; s[t] = (s[t] >= s[t + 1]); break;
-          case 12: t--; s[t] = (s[t] > s[t + 1]); break;
-          case 13: t--; s[t] = (s[t] <= s[t + 1]); break;
+          case RET: t = b - 1; p = s[t + 3]; b = s[t + 2]; break;
+          case NEGATE: s[t] = -s[t]; break;
+          case PLUS: t--; s[t] = (s[t] + s[t + 1]); break;
+          case MINUS: t--; s[t] = (s[t] - s[t + 1]); break;
+          case TIMES: t--; s[t] = (s[t] * s[t + 1]); break;
+          case DIV: t--; s[t] = (s[t] / s[t + 1]); break;
+          case ODD: s[t] = (s[t] % 2 == 1); break;
+          case EQ: t--; s[t] = (s[t] == s[t + 1]); break;
+          case NEQ: t--; s[t] = (s[t] != s[t + 1]); break;
+          case LESS: t--; s[t] = (s[t] < s[t + 1]); break;
+          case GEQ: t--; s[t] = (s[t] >= s[t + 1]); break;
+          case GTR: t--; s[t] = (s[t] > s[t + 1]); break;
+          case LEQ: t--; s[t] = (s[t] <= s[t + 1]); break;
           default: error(30);
         }
         break;
