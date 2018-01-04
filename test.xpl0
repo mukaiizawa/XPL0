@@ -1,6 +1,7 @@
 const m = 7, n = 85;
-var x;
+var x, y;
 
 begin
   x := m + n;
+  y := x + 1
 end.

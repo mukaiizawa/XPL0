@@ -75,7 +75,7 @@ struct object {
   enum object_type kind;
   int val;
   int level;
-  int adr;
+  int addr;
 };
 static struct object table[MAX_TX];
 
@@ -86,7 +86,7 @@ static enum symbol lex_sym;
 static int lex_num;
 static char lex_str[MAX_IDENTIFIER];
 
-static int tx, dx, cx;    // index of table, data allocation, code allocation
+static int tx, cx;    // table and code allocation index
 
 static void dump(void)
 {
@@ -95,7 +95,7 @@ static void dump(void)
   fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++)
     fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
-        , object_type_name[table[i].kind], table[i].level , table[i].adr
+        , object_type_name[table[i].kind], table[i].level , table[i].addr
         , table[i].val);
   fprintf(out, "\n*** instruction ***\n");
   for (int i = 0; i < cx; i++)
@@ -225,19 +225,19 @@ static void gen(enum mnemonic m, int l, int a)
   cx++;
 }
 
-static void enter(enum object_type o, int lev)
+static void enter(enum object_type o, int lev, int *dx)
 {
   if (tx > MAX_TX) error(32);
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
-  table[tx].val = table[tx].level = table[tx].adr = 0;
+  table[tx].val = table[tx].level = table[tx].addr = 0;
   switch (o) {
     case constant:
       table[tx].val = lex_num;
       break;
     case variable:
       table[tx].level = lev;
-      table[tx].adr = dx++;
+      table[tx].addr = *dx++;
       break;
     case proc:
       table[tx].level = lev;
@@ -254,10 +254,10 @@ static struct object find_by_name(char *name)
   return table[0];    // unreachable
 }
 
-static struct object find_by_adr(int adr)
+static struct object find_by_addr(int addr)
 {
   for (int i = 0; i < tx; i++)
-    if (table[i].adr == adr) return table[i];
+    if (table[i].addr == addr) return table[i];
   error(34);
   return table[0];    // unreachable
 }
@@ -272,9 +272,7 @@ static void parse_factor(int lev)
         struct object o = find_by_name(lex_str);
         switch (o.kind) {
           case constant: gen(LIT, 0, o.val); break;
-          case variable:
-            gen(LOD, lev - o.level, o.adr);
-            break;
+          case variable: gen(LOD, lev - o.level, o.addr); break;
           case proc: error(21); break;
           default: error(33);
         }
@@ -365,13 +363,13 @@ static void parse_statement(int lev)
       if (getsym() != becomes) error(13);
       getsym();    // skip ':='
       parse_expression(lev);
-      gen(STO, lev - o.level, o.adr);
+      gen(STO, lev - o.level, o.addr);
       break;
     case callsym:
       if (getsym() != ident) error(14);
       o = find_by_name(lex_str);
       if (o.kind != proc) error(15);
-      gen(CAL, lev - o.level, o.adr);
+      gen(CAL, lev - o.level, o.addr);
       getsym();
       break;
     case ifsym:
@@ -413,9 +411,10 @@ static void parse_statement(int lev)
 
 static void parse_block(int lev)
 {
-  int tx0 = tx;
+  int dx, tx0;    // data allocation index / initial table index
   dx = 3;
-  table[tx].adr = cx;
+  tx0 = tx;
+  table[tx].addr = cx;
   gen(JMP, 0, 0);
   if (getsym() == constsym) {
     while (lex_sym != semicolon) {
@@ -423,7 +422,7 @@ static void parse_block(int lev)
       if (getsym() == becomes) error(1);
       if (lex_sym != eql) error(3);
       if (getsym() != number) error(2);
-      enter(constant, lev);
+      enter(constant, lev, &dx);
       if (getsym() != comma && lex_sym != semicolon) error(5);
     }
     getsym();    // skip ';'
@@ -431,24 +430,24 @@ static void parse_block(int lev)
   if (lex_sym == varsym) {
     while (lex_sym != semicolon) {
       if (getsym() != ident) error(28);
-      enter(variable, lev);
+      enter(variable, lev, &dx);
       if (getsym() != comma && lex_sym != semicolon) error(5);
     }
     getsym();    // skip ';'
   }
   while (lex_sym == procsym) {
     if (getsym() != ident) error(29);
-    enter(proc, lev);
+    enter(proc, lev, &dx);
     if (getsym() != semicolon) error(4);
     parse_block(lev + 1);
     if (lex_sym != semicolon) error(4);
     getsym();
   }
-  code[table[tx0].adr].a = cx;    // start address of code
-  table[tx0].adr = cx;
+  code[table[tx0].addr].a = cx;    // start address of code
+  table[tx0].addr = cx;
   gen(INT, 0, dx);
   parse_statement(lev);
-  gen(OPR, 0, RET);    // return
+  gen(OPR, 0, RET);
 }
 
 static void parse_program(void)
@@ -497,7 +496,7 @@ static void interpret(void)
       case LOD: s[++t] = s[base(s, inst.l, b) + inst.a]; break;
       case STO:
         s[base(s, inst.l, b) + inst.a] = s[t];
-        fprintf(out, "assign %d to %s\n", s[t], find_by_adr(inst.a).name);
+        fprintf(out, "assign %d to %s\n", s[t], find_by_addr(inst.a).name);
         t--;
         break;
       case CAL:
@@ -528,7 +527,7 @@ int main (int argc, char **argv)
   in = stdin; out = stdout; err = stderr;
   setbuf(out, NULL);
   lex_init();
-  tx = dx = cx = 0;
+  tx = cx = 0;
   parse_program();
   dump();
   interpret();
