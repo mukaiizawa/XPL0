@@ -522,7 +522,12 @@ begin
       end;
       opr:
       case a of {operator}
-        0: begin {return} t := b - 1; p := s[t + 3]; b := s[t + 2]; end;
+        0: {return}
+        begin
+          t := b - 1;
+          b := s[t + 2];
+          p := s[t + 3];
+        end;
         1: s[t] := -s[t];
         2: begin t := t - 1; s[t] := s[t] + s[t + 1] end;
         3: begin t := t - 1; s[t] := s[t] - s[t + 1] end;
@@ -540,8 +545,11 @@ begin
       sto: begin s[base(l)+a] := s[t]; writeln(s[t]); t := t - 1 end;
       cal:
       begin {generate new block mark}
-        s[t + 1] := base(l); s[t + 2] := b; s[t + 3] := p;
-        b := t + 1; p := a
+        s[t + 1] := base(l);
+        s[t + 2] := b;
+        s[t + 3] := p;
+        b := t + 1;
+        p := a
       end;
       int: t := t + a;
       jmp: p := a;
