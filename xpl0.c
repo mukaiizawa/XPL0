@@ -29,7 +29,7 @@
 #define MAX_IDENTIFIER 10
 #define MAX_TX 100
 #define MAX_CX 2000
-#define STACK_SIZE 500
+#define STACK_SIZE 50
 
 enum symbol {
   becomes, beginsym, callsym, comma, constsym, dosym, endsym, eql, geq, gtr,
@@ -92,15 +92,17 @@ static void dump(void)
 {
 #ifndef NDEBUG 
   fprintf(out, "\n*** table ***\n");
-  fprintf(out, "name\tobject\tlevel\taddress\tvalue\n");
+  fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++) {
     fprintf(out, "%s\t%s\t", table[i].name, object_type_name[table[i].kind]);
     switch (table[i].kind) {
-      case constant:
-        fprintf(out, "-\t-\t%d\n", table[i].val); break;
-      case variable:
-      case proc:
-        fprintf(out, "%d\t%d\t-\n", table[i].level, table[i].addr); break;
+      default:
+        fprintf(out, "%d\t%d\t%d\n", table[i].level, table[i].addr, table[i].val); break;
+      // case constant:
+      //   fprintf(out, "-\t-\t%d\n", table[i].val); break;
+      // case variable:
+      // case proc:
+      //   fprintf(out, "%d\t%d\t-\n", table[i].level, table[i].addr); break;
     }
   }
   fprintf(out, "\n*** instruction ***\n");
@@ -110,7 +112,13 @@ static void dump(void)
 #endif
 }
 
-static void error(int n)
+static void xerror(char *msg)
+{
+  fprintf(err, "\nerror: %s.\n", msg);
+  exit(1);
+}
+
+static void lex_error(int n)
 {
   char* msg = NULL;
   switch (n) {
@@ -139,21 +147,18 @@ static void error(int n)
     case 27: msg = "'const' must be followed by identifier"; break;
     case 28: msg = "'var' must be followed by identifier"; break;
     case 29: msg = "'procedure' must be followed by identifier"; break;
-    case 30: msg = "undefined operator"; break;
-    case 31: msg = "undefined mnemonic"; break;
     case 32: msg = "object is too many"; break;
     case 33: msg = "undefined object type"; break;
     case 34: msg = "cannot find object"; break;
-    default: msg = "error";
+    default: msg = "";
   }
-  fprintf(err, "\nerror: %s.\n", msg);
-  fprintf(err, "at line %d, column %d\n", lex_line + 1, lex_column + 1);
-  exit(1);
+  fprintf(err, "line %d, column %d\n", lex_line + 1, lex_column + 1);
+  xerror(msg);
 }
 
 void nextch(void)
 {
-  if (feof(in)) error(25);
+  if (feof(in)) lex_error(25);
 #ifndef NDEBUG
   if (lex_line == 0 && lex_ch == '\n')
     fprintf(out, "\n*** source ***\n");
@@ -175,7 +180,7 @@ enum symbol getsym(void)
   if (isalpha(lex_ch)) {
     lex_sym = ident;
     for (int i = 0; isalnum(lex_ch); i++) {
-      if ((i + 1) >= MAX_IDENTIFIER) error(24);
+      if ((i + 1) >= MAX_IDENTIFIER) lex_error(24);
       lex_str[i] = lex_ch;
       lex_str[i + 1] = '\0';
       nextch();
@@ -223,7 +228,7 @@ enum symbol getsym(void)
 
 static void gen(enum mnemonic m, int l, int a)
 {
-  if (cx > MAX_CX) error(23);
+  if (cx > MAX_CX) lex_error(23);
   code[cx].m = m;
   code[cx].l = l;
   code[cx].a = a;
@@ -232,7 +237,7 @@ static void gen(enum mnemonic m, int l, int a)
 
 static void enter(enum object_type o, int lev, int *dx)
 {
-  if (tx > MAX_TX) error(32);
+  if (tx > MAX_TX) lex_error(32);
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
   switch (o) {
@@ -254,7 +259,7 @@ static struct object find_by_name(char *name)
 {
   for (int i = tx; i >= 0; i--)
     if (strcmp(table[i].name, name) == 0) return table[i];
-  error(11);
+  lex_error(11);
   return table[0];    // unreachable
 }
 
@@ -262,7 +267,7 @@ static struct object find_by_addr(int addr)
 {
   for (int i = 0; i < tx; i++)
     if (table[i].addr == addr) return table[i];
-  error(34);
+  lex_error(34);
   return table[0];    // unreachable
 }
 
@@ -277,8 +282,8 @@ static void parse_factor(int lev)
         switch (o.kind) {
           case constant: gen(LIT, 0, o.val); break;
           case variable: gen(LOD, lev - o.level, o.addr); break;
-          case proc: error(21); break;
-          default: error(33);
+          case proc: lex_error(21); break;
+          default: lex_error(33);
         }
         getsym();
         break;
@@ -290,10 +295,10 @@ static void parse_factor(int lev)
     case lparen:
       getsym();    // skip '('
       parse_expression(lev);
-      if (lex_sym != rparen) error(22);
+      if (lex_sym != rparen) lex_error(22);
       getsym();    // skip ')'
       break;
-    default: error(26);
+    default: lex_error(26);
   }
 }
 
@@ -340,7 +345,7 @@ static void parse_condition(int lev)
     relop = lex_sym;
     switch (relop) {
       case eql: case neq: case lss: case leq: case gtr: case geq: break;
-      default: error(20);
+      default: lex_error(20);
     }
     getsym();
     parse_expression(lev);
@@ -363,23 +368,23 @@ static void parse_statement(int lev)
   switch (lex_sym) {
     case ident:
       o = find_by_name(lex_str);
-      if (o.kind != variable) error(12);
-      if (getsym() != becomes) error(13);
+      if (o.kind != variable) lex_error(12);
+      if (getsym() != becomes) lex_error(13);
       getsym();    // skip ':='
       parse_expression(lev);
       gen(STO, lev - o.level, o.addr);
       break;
     case callsym:
-      if (getsym() != ident) error(14);
+      if (getsym() != ident) lex_error(14);
       o = find_by_name(lex_str);
-      if (o.kind != proc) error(15);
+      if (o.kind != proc) lex_error(15);
       gen(CAL, lev - o.level, o.addr);
       getsym();
       break;
     case ifsym:
       getsym();    // skip 'if'
       parse_condition(lev);
-      if (lex_sym != thensym) error(16);
+      if (lex_sym != thensym) lex_error(16);
       cx1 = cx;
       gen(JPC, 0, 0);
       getsym();    // skip 'then'
@@ -390,10 +395,10 @@ static void parse_statement(int lev)
       getsym();    // skip 'begin'
       parse_statement(lev);
       while (lex_sym != endsym) {
-        if (lex_sym != semicolon) error(10);
+        if (lex_sym != semicolon) lex_error(10);
         getsym();    // skip ';'
         parse_statement(lev);
-        if (lex_sym != semicolon && lex_sym != endsym) error(17);
+        if (lex_sym != semicolon && lex_sym != endsym) lex_error(17);
       }
       getsym();    // skip 'end'
       break;
@@ -403,7 +408,7 @@ static void parse_statement(int lev)
       parse_condition(lev);
       cx2 = cx;
       gen(JPC, 0, 0);
-      if (lex_sym != dosym) error(18);
+      if (lex_sym != dosym) lex_error(18);
       getsym();    //  skip 'do'
       parse_statement(lev);
       gen(JMP, 0, cx1);
@@ -416,37 +421,42 @@ static void parse_statement(int lev)
 static void parse_block(int lev)
 {
   int dx;    // data allocation index
-  int tx0 = tx, cx0 = cx;
+  int tx0 = tx;
   dx = 3;    // initial stack frame size
+  printf("table[%d].addr <- %d\n", tx0, cx);
+  table[tx0].addr = cx;
   gen(JMP, 0, 0);
   if (getsym() == constsym) {
     while (lex_sym != semicolon) {
-      if (getsym() != ident) error(27);
-      if (getsym() == becomes) error(1);
-      if (lex_sym != eql) error(3);
-      if (getsym() != number) error(2);
+      if (getsym() != ident) lex_error(27);
+      if (getsym() == becomes) lex_error(1);
+      if (lex_sym != eql) lex_error(3);
+      if (getsym() != number) lex_error(2);
       enter(constant, lev, &dx);
-      if (getsym() != comma && lex_sym != semicolon) error(5);
+      if (getsym() != comma && lex_sym != semicolon) lex_error(5);
     }
     getsym();    // skip ';'
   }
   if (lex_sym == varsym) {
     while (lex_sym != semicolon) {
-      if (getsym() != ident) error(28);
+      if (getsym() != ident) lex_error(28);
       enter(variable, lev, &dx);
-      if (getsym() != comma && lex_sym != semicolon) error(5);
+      if (getsym() != comma && lex_sym != semicolon) lex_error(5);
     }
     getsym();    // skip ';'
   }
   while (lex_sym == procsym) {
-    if (getsym() != ident) error(29);
+    if (getsym() != ident) lex_error(29);
     enter(proc, lev, &dx);
-    if (getsym() != semicolon) error(4);
+    if (getsym() != semicolon) lex_error(4);
     parse_block(lev + 1);
-    if (lex_sym != semicolon) error(4);
+    if (lex_sym != semicolon) lex_error(4);
     getsym();    // skip ';'
   }
-  code[cx0].a = table[tx0].addr = cx;
+  printf("code[%d].a <- %d\n", table[tx0].addr, cx);
+  code[table[tx0].addr].a = cx;
+  printf("table[%d].addr <- %d\n", tx , cx);
+  table[tx0].addr = cx;
   gen(INT, 0, dx);
   parse_statement(lev);
   gen(OPR, 0, RET);
@@ -455,7 +465,7 @@ static void parse_block(int lev)
 static void parse_program(void)
 {
   parse_block(0);
-  if (lex_sym != period) error(6);
+  if (lex_sym != period) lex_error(6);
 }
 
 static int base(int s[], int b, int level)
@@ -476,6 +486,7 @@ static void interpret(void)
   fprintf(out, "p\tb\tt\ts\n");
 #endif
   do {
+    if (tx > STACK_SIZE) xerror("stack overflow");
 #ifndef NDEBUG 
     fprintf(out, "%d\t%d\t%d\t", p, b, t);
     for (int i = 0; i < t + 5; i++) {
@@ -491,7 +502,8 @@ static void interpret(void)
       case OPR:
         switch (inst.a) {
           case RET:
-            fprintf(out, "return %d\n", t = b - 1);
+            fprintf(out, "return %d\n", b - 1);
+            t = b - 1;
             b = s[t + 2];
             p = s[t + 3];
             break;
@@ -507,7 +519,7 @@ static void interpret(void)
           case GEQ: t--; s[t] = (s[t] >= s[t + 1]); break;
           case GTR: t--; s[t] = (s[t] > s[t + 1]); break;
           case LEQ: t--; s[t] = (s[t] <= s[t + 1]); break;
-          default: error(30);
+          default: xerror("illegal operator");
         }
         break;
       case LOD: s[++t] = s[base(s, b, inst.l) + inst.a]; break;
@@ -526,7 +538,7 @@ static void interpret(void)
       case INT: t += inst.a; break;
       case JMP: p = inst.a; break;
       case JPC: if(!s[t]) p = inst.a; else t--; break;
-      default: error(31);
+      default: xerror("illegal mnemonic");
     }
   } while (p != 0);
 }
