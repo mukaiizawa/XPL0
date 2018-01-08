@@ -43,7 +43,7 @@ char *symbol_name[] = {
 };
 
 enum object_type { constant, variable, proc };
-char *object_type_name[] = { "constant", "variable", "proc" };
+char *object_type_name[] = { "constant", "variable", "procedure" };
 
 enum mnemonic {
   LIT,    // [LIT, 0, a] load constant a
@@ -92,15 +92,21 @@ static void dump(void)
 {
 #ifndef NDEBUG 
   fprintf(out, "\n*** table ***\n");
-  fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
-  for (int i = 0; i < tx; i++)
-    fprintf(out, "%s\t%s\t%d\t%d\t%d\n", table[i].name
-        , object_type_name[table[i].kind], table[i].level , table[i].addr
-        , table[i].val);
+  fprintf(out, "name\tobject\tlevel\taddress\tvalue\n");
+  for (int i = 0; i < tx; i++) {
+    fprintf(out, "%s\t%s\t", table[i].name, object_type_name[table[i].kind]);
+    switch (table[i].kind) {
+      case constant:
+        fprintf(out, "-\t-\t%d\n", table[i].val); break;
+      case variable:
+      case proc:
+        fprintf(out, "%d\t%d\t-\n", table[i].level, table[i].addr); break;
+    }
+  }
   fprintf(out, "\n*** instruction ***\n");
   for (int i = 0; i < cx; i++)
-    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l
-        , code[i].a);
+    fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l,
+        code[i].a);
 #endif
 }
 
@@ -142,7 +148,6 @@ static void error(int n)
   }
   fprintf(err, "\nerror: %s.\n", msg);
   fprintf(err, "at line %d, column %d\n", lex_line + 1, lex_column + 1);
-  dump();
   exit(1);
 }
 
@@ -230,14 +235,13 @@ static void enter(enum object_type o, int lev, int *dx)
   if (tx > MAX_TX) error(32);
   strcpy(table[tx].name, lex_str);
   table[tx].kind = o;
-  table[tx].val = table[tx].level = table[tx].addr = 0;
   switch (o) {
     case constant:
       table[tx].val = lex_num;
       break;
     case variable:
       table[tx].level = lev;
-      table[tx].addr = *dx++;
+      table[tx].addr = (*dx)++;
       break;
     case proc:
       table[tx].level = lev;
@@ -411,10 +415,9 @@ static void parse_statement(int lev)
 
 static void parse_block(int lev)
 {
-  int dx, tx0;    // data allocation index / initial table index
-  dx = 3;
-  tx0 = tx;
-  table[tx].addr = cx;
+  int dx;    // data allocation index
+  int tx0 = tx, cx0 = cx;
+  dx = 3;    // initial stack frame size
   gen(JMP, 0, 0);
   if (getsym() == constsym) {
     while (lex_sym != semicolon) {
@@ -441,10 +444,9 @@ static void parse_block(int lev)
     if (getsym() != semicolon) error(4);
     parse_block(lev + 1);
     if (lex_sym != semicolon) error(4);
-    getsym();
+    getsym();    // skip ';'
   }
-  code[table[tx0].addr].a = cx;    // start address of code
-  table[tx0].addr = cx;
+  code[cx0].a = table[tx0].addr = cx;
   gen(INT, 0, dx);
   parse_statement(lev);
   gen(OPR, 0, RET);
@@ -456,34 +458,49 @@ static void parse_program(void)
   if (lex_sym != period) error(6);
 }
 
-static int base(int s[], int l, int b)
+static int base(int s[], int b, int level)
 {
-  int b1 = b;
-  while (l-- > 0) b1 = s[b1];
-  return b1;
+  while (level-- > 0) b = s[b];
+  return b;
 }
 
 static void interpret(void)
 {
   struct instruction inst;
-  int s[STACK_SIZE];    // stack
-  int p, b, t;    // program, base, topstack-registers
-  s[0] = s[1] = s[2] = 0;
+  int p, b, t;    // program-, base-, topstack-register
+  int s[STACK_SIZE];
   p = t = 0, b = 1;
+  for (int i = 0; i < STACK_SIZE; i++) s[i] = 0;
   fprintf(out, "\n*** start xpl0 ***\n");
+#ifndef NDEBUG 
+  fprintf(out, "p\tb\tt\ts\n");
+#endif
   do {
+#ifndef NDEBUG 
+    fprintf(out, "%d\t%d\t%d\t", p, b, t);
+    for (int i = 0; i < t + 5; i++) {
+      fprintf(out, "%d ", s[i]);
+      if (i == code[p].l) fprintf(out, "| ");
+      if (i == t) fprintf(out, "< ");
+    }
+    fprintf(out, "\n");
+#endif
     inst = code[p++];
     switch (inst.m) {
       case LIT: s[++t] = inst.a; break;
       case OPR:
         switch (inst.a) {
-          case RET: t = b - 1; p = s[t + 3]; b = s[t + 2]; break;
+          case RET:
+            fprintf(out, "return %d\n", t = b - 1);
+            b = s[t + 2];
+            p = s[t + 3];
+            break;
           case NEGATE: s[t] = -s[t]; break;
-          case PLUS: t--; s[t] = (s[t] + s[t + 1]); break;
-          case MINUS: t--; s[t] = (s[t] - s[t + 1]); break;
-          case TIMES: t--; s[t] = (s[t] * s[t + 1]); break;
-          case DIV: t--; s[t] = (s[t] / s[t + 1]); break;
-          case ODD: s[t] = (s[t] % 2 == 1); break;
+          case PLUS: t--; s[t] = s[t] + s[t + 1]; break;
+          case MINUS: t--; s[t] = s[t] - s[t + 1]; break;
+          case TIMES: t--; s[t] = s[t] * s[t + 1]; break;
+          case DIV: t--; s[t] = s[t] / s[t + 1]; break;
+          case ODD: s[t] = s[t] % 2; break;
           case EQ: t--; s[t] = (s[t] == s[t + 1]); break;
           case NEQ: t--; s[t] = (s[t] != s[t + 1]); break;
           case LESS: t--; s[t] = (s[t] < s[t + 1]); break;
@@ -493,22 +510,22 @@ static void interpret(void)
           default: error(30);
         }
         break;
-      case LOD: s[++t] = s[base(s, inst.l, b) + inst.a]; break;
+      case LOD: s[++t] = s[base(s, b, inst.l) + inst.a]; break;
       case STO:
-        s[base(s, inst.l, b) + inst.a] = s[t];
         fprintf(out, "assign %d to %s\n", s[t], find_by_addr(inst.a).name);
-        t--;
+        s[base(s, b, inst.l) + inst.a] = s[t--];
         break;
       case CAL:
-        s[t + 1] = base(s, inst.l, b);
-        s[t + 2] = b;
-        s[t + 3] = p;
+        fprintf(out, "call %s\n", find_by_addr(inst.a).name);
+        s[t + 1] = base(s, b, inst.l);    // static link
+        s[t + 2] = b;    // dynamic link
+        s[t + 3] = p;    // return address
         b = t + 1;
         p = inst.a;
         break;
       case INT: t += inst.a; break;
       case JMP: p = inst.a; break;
-      case JPC: if(s[t]) p = inst.a; else t--; break;
+      case JPC: if(!s[t]) p = inst.a; else t--; break;
       default: error(31);
     }
   } while (p != 0);
