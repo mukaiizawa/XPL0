@@ -1,0 +1,10 @@
+var x;
+
+procedure f;
+var x;
+x := 3;
+
+begin
+  x := 1;
+  call f;
+end.

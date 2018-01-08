@@ -1,2 +1,7 @@
-var a;
-.
+const a = 3;
+var x, y;
+
+begin
+  x := 1 + 3 * 5;
+  y := a * x + 3;
+end.

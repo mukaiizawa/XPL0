@@ -1,0 +1,7 @@
+const n = 3;
+var x;
+
+begin
+  x := n;
+  while x > 0 do x := x - 1;
+end.
