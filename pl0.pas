@@ -370,8 +370,7 @@ procedure block(lev,tx: integer; fsys: symset);
       else
       begin
         i := position(id);
-        if i = 0 then
-        error(11)
+        if i = 0 then error(11)
         else
         with table[i] do
         if kind=proc then gen(cal, lev-level, adr)

@@ -1,6 +1,7 @@
-const m = 6;
+const m = 3;
 var x;
 
 begin
-  if 4 > 3 then x := m * m;
+  if odd m then x := m;
+  if odd m + 1 then x := m + 1;
 end.

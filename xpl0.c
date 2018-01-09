@@ -90,26 +90,23 @@ static int tx, cx;    // table and code allocation index
 
 static void dump(void)
 {
-#ifndef NDEBUG 
   fprintf(out, "\n*** table ***\n");
   fprintf(out, "name\tobject_type\tlevel\taddress\tvalue\n");
   for (int i = 0; i < tx; i++) {
     fprintf(out, "%s\t%s\t", table[i].name, object_type_name[table[i].kind]);
     switch (table[i].kind) {
       default:
-        fprintf(out, "%d\t%d\t%d\n", table[i].level, table[i].addr, table[i].val); break;
-      // case constant:
-      //   fprintf(out, "-\t-\t%d\n", table[i].val); break;
-      // case variable:
-      // case proc:
-      //   fprintf(out, "%d\t%d\t-\n", table[i].level, table[i].addr); break;
+      case constant:
+        fprintf(out, "-\t-\t%d\n", table[i].val); break;
+      case variable:
+      case proc:
+        fprintf(out, "%d\t%d\t-\n", table[i].level, table[i].addr); break;
     }
   }
   fprintf(out, "\n*** instruction ***\n");
   for (int i = 0; i < cx; i++)
     fprintf(out, "%4d: %s %d,%d\n", i, mnemonic_name[code[i].m], code[i].l,
         code[i].a);
-#endif
 }
 
 static void xerror(char *msg)
@@ -149,7 +146,6 @@ static void lex_error(int n)
     case 29: msg = "'procedure' must be followed by identifier"; break;
     case 32: msg = "object is too many"; break;
     case 33: msg = "undefined object type"; break;
-    case 34: msg = "cannot find object"; break;
     default: msg = "";
   }
   fprintf(err, "line %d, column %d\n", lex_line + 1, lex_column + 1);
@@ -255,19 +251,11 @@ static void enter(enum object_type o, int lev, int *dx)
   tx++;
 }
 
-static struct object find_by_name(char *name)
+static struct object find(char *name)
 {
   for (int i = tx; i >= 0; i--)
     if (strcmp(table[i].name, name) == 0) return table[i];
   lex_error(11);
-  return table[0];    // unreachable
-}
-
-static struct object find_by_addr(int addr)
-{
-  for (int i = 0; i < tx; i++)
-    if (table[i].addr == addr) return table[i];
-  lex_error(34);
   return table[0];    // unreachable
 }
 
@@ -278,7 +266,7 @@ static void parse_factor(int lev)
   switch (lex_sym) {
     case ident:
       {
-        struct object o = find_by_name(lex_str);
+        struct object o = find(lex_str);
         switch (o.kind) {
           case constant: gen(LIT, 0, o.val); break;
           case variable: gen(LOD, lev - o.level, o.addr); break;
@@ -367,7 +355,7 @@ static void parse_statement(int lev)
   int cx1, cx2;
   switch (lex_sym) {
     case ident:
-      o = find_by_name(lex_str);
+      o = find(lex_str);
       if (o.kind != variable) lex_error(12);
       if (getsym() != becomes) lex_error(13);
       getsym();    // skip ':='
@@ -376,7 +364,7 @@ static void parse_statement(int lev)
       break;
     case callsym:
       if (getsym() != ident) lex_error(14);
-      o = find_by_name(lex_str);
+      o = find(lex_str);
       if (o.kind != proc) lex_error(15);
       gen(CAL, lev - o.level, o.addr);
       getsym();
@@ -420,11 +408,10 @@ static void parse_statement(int lev)
 
 static void parse_block(int lev)
 {
-  int dx;    // data allocation index
-  int tx0 = tx;
-  dx = 3;    // initial stack frame size
-  printf("table[%d].addr <- %d\n", tx0, cx);
-  table[tx0].addr = cx;
+  int dx = 3;    // data allocation index
+  int cx0 = cx;
+  int proc_tx = tx - 1;
+  if (proc_tx > 0) table[proc_tx].addr = cx0;
   gen(JMP, 0, 0);
   if (getsym() == constsym) {
     while (lex_sym != semicolon) {
@@ -453,10 +440,8 @@ static void parse_block(int lev)
     if (lex_sym != semicolon) lex_error(4);
     getsym();    // skip ';'
   }
-  printf("code[%d].a <- %d\n", table[tx0].addr, cx);
-  code[table[tx0].addr].a = cx;
-  printf("table[%d].addr <- %d\n", tx , cx);
-  table[tx0].addr = cx;
+  code[cx0].a = cx;
+  if (proc_tx > 0) table[proc_tx].addr = cx;
   gen(INT, 0, dx);
   parse_statement(lev);
   gen(OPR, 0, RET);
@@ -483,15 +468,16 @@ static void interpret(void)
   for (int i = 0; i < STACK_SIZE; i++) s[i] = 0;
   fprintf(out, "\n*** start xpl0 ***\n");
 #ifndef NDEBUG 
-  fprintf(out, "p\tb\tt\ts\n");
+  fprintf(out, "p   a,l\t\tb\tt\ts\n");
 #endif
   do {
-    if (tx > STACK_SIZE) xerror("stack overflow");
+    if (t > STACK_SIZE) xerror("stack overflow");
 #ifndef NDEBUG 
-    fprintf(out, "%d\t%d\t%d\t", p, b, t);
+    fprintf(out, "%s %d,%d\t\t%d\t%d\t", mnemonic_name[code[p].m], code[p].a,
+        code[p].l, b, t);
     for (int i = 0; i < t + 5; i++) {
       fprintf(out, "%d ", s[i]);
-      if (i == code[p].l) fprintf(out, "| ");
+      if (i == b - 1) fprintf(out, "> ");
       if (i == t) fprintf(out, "< ");
     }
     fprintf(out, "\n");
@@ -501,8 +487,7 @@ static void interpret(void)
       case LIT: s[++t] = inst.a; break;
       case OPR:
         switch (inst.a) {
-          case RET:
-            fprintf(out, "return %d\n", b - 1);
+          case RET:    // see CAL
             t = b - 1;
             b = s[t + 2];
             p = s[t + 3];
@@ -524,11 +509,10 @@ static void interpret(void)
         break;
       case LOD: s[++t] = s[base(s, b, inst.l) + inst.a]; break;
       case STO:
-        fprintf(out, "assign %d to %s\n", s[t], find_by_addr(inst.a).name);
+        fprintf(out, "assign %d\n", s[t]);
         s[base(s, b, inst.l) + inst.a] = s[t--];
         break;
       case CAL:
-        fprintf(out, "call %s\n", find_by_addr(inst.a).name);
         s[t + 1] = base(s, b, inst.l);    // static link
         s[t + 2] = b;    // dynamic link
         s[t + 3] = p;    // return address
