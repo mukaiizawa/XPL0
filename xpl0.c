@@ -123,6 +123,7 @@ static void lex_error(int n)
     case 4: msg = "';' missing"; break;
     case 5: msg = "',' or ';' missing"; break;
     case 6: msg = "'.' expected"; break;
+    case 7: msg = "illegal identifier name"; break;
     case 10: msg = "';' between statements missing"; break;
     case 11: msg = "undeclared identifier"; break;
     case 12: msg = "assignment to constant or procedure is not allowed"; break;
@@ -213,7 +214,7 @@ enum symbol getsym(void)
         if (lex_ch == '=') {
           lex_sym = becomes; break;
         }
-      default: lex_sym = nil; break;
+      default: lex_error(7);
     }
     nextch();
   }
