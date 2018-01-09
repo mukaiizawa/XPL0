@@ -467,13 +467,13 @@ static void interpret(void)
   for (int i = 0; i < STACK_SIZE; i++) s[i] = 0;
   fprintf(out, "\n*** start xpl0 ***\n");
 #ifndef NDEBUG 
-  fprintf(out, "p   a,l\t\tb\tt\ts\n");
+  fprintf(out, "p   l,a\t\tb\tt\ts\n");
 #endif
   do {
     if (t > STACK_SIZE) xerror("stack overflow");
 #ifndef NDEBUG 
-    fprintf(out, "%s %d,%d\t\t%d\t%d\t", mnemonic_name[code[p].m], code[p].a,
-        code[p].l, b, t);
+    fprintf(out, "%s %d,%d\t\t%d\t%d\t", mnemonic_name[code[p].m], code[p].l,
+        code[p].a, b, t);
     for (int i = 0; i < t + 5; i++) {
       fprintf(out, "%d ", s[i]);
       if (i == b - 1) fprintf(out, "> ");
