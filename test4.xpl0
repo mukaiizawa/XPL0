@@ -1,0 +1,17 @@
+var n, result;
+
+procedure f;
+begin
+  if n > 1 then
+  begin
+    n := n - 1;
+    result := result * n;
+    call f;
+  end;
+end;
+
+begin
+  n := 5;
+  result := n;
+  call f;
+end.
