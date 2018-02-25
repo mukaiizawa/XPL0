@@ -1,5 +1,5 @@
 # makefile
-# Usage: make [os=linux] [cc=gcc] [debug=off]
+# Usage: make [os=windows] [cc=gcc] [debug=off]
 
 supportos=linux windows
 os?=linux
