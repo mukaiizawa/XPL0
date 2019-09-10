@@ -40,8 +40,7 @@ char *symbol_name[] = {
   "procedure", ")", ";", "/", "then", "*", "var", "while", "nil"
 };
 
-enum object_type { constant, variable, proc };
-char *object_type_name[] = { "constant", "variable", "procedure" };
+// instruction
 
 enum mnemonic {
   LIT,    // [LIT, 0, a] load constant a
@@ -67,6 +66,11 @@ struct instruction {
   int a;
 };
 static struct instruction code[MAX_CX];
+
+// object
+
+enum object_type { constant, variable, proc };
+char *object_type_name[] = { "constant", "variable", "procedure" };
 
 struct object {
   char name[MAX_IDENTIFIER];

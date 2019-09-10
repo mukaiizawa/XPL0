@@ -1,0 +1,16 @@
+var n;
+
+procedure f;
+begin
+  n := n + 1
+end;
+
+procedure g;
+begin
+  n := 1;
+  call f;
+end;
+
+begin
+  call g;
+end.
